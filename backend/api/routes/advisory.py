@@ -55,10 +55,15 @@ class AdvisoryRequest(BaseModel):
 @router.post("/advisory", response_model=AdvisoryResponse)
 async def create_advisory(req: AdvisoryRequest):
     """Run the full orchestrator pipeline on a text query."""
+    try:
+        channel = Channel(req.channel)
+    except ValueError:
+        channel = Channel.WEB
+
     query = FarmerQuery(
         farmer_id=req.farmer_id,
         raw_input=req.text_input,
-        channel=Channel(req.channel) if req.channel in Channel.__members__.values() or req.channel in [e.value for e in Channel] else Channel.WEB,
+        channel=channel,
     )
     result = await run_orchestrator(query)
     return result

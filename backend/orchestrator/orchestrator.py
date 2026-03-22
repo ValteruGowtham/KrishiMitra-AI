@@ -120,7 +120,7 @@ async def load_farmer(state: dict) -> dict:
                 except Exception:
                     soil = None
 
-            farmer = FarmerProfile(
+            s.farmer = FarmerProfile(
                 farmer_id=row.farmer_id,
                 name=row.name,
                 state=row.state,
@@ -135,12 +135,11 @@ async def load_farmer(state: dict) -> dict:
                 enrolled_schemes=json.loads(row.enrolled_schemes) if row.enrolled_schemes else [],
             )
         else:
-            farmer = _DEMO_FARMER
+            s.farmer = _DEMO_FARMER
     finally:
         db.close()
 
-    s.farmer = farmer
-    s.audit_log.append({"node": "load_farmer", "farmer_id": farmer.farmer_id, "source": "db" if row else "demo"})
+    s.audit_log.append({"node": "load_farmer", "farmer_id": s.farmer.farmer_id, "source": "db" if row else "demo"})
     return _state_to_dict(s)
 
 
@@ -156,9 +155,19 @@ async def parse_intent(state: dict) -> dict:
     voice_msg = await voice.run(s.query, s.farmer)
 
     primary = voice_msg.output_data.get("primary_intent", "general")
-    intent = Intent(primary) if primary in Intent.__members__.values() or primary in [e.value for e in Intent] else Intent.GENERAL
+    try:
+        intent = Intent(primary)
+    except ValueError:
+        intent = Intent.GENERAL
     s.intent = intent
     s.query.intent = intent
+
+    # Short-circuit: distress queries skip all agents → compliance layer handles everything
+    if intent == Intent.DISTRESS:
+        s.agents_to_invoke = []
+        s.agent_responses["voice_agent"] = voice_msg
+        s.audit_log.append({"node": "parse_intent", "intent": "distress", "agents": []})
+        return _state_to_dict(s)
 
     agents = list(_INTENT_AGENT_MAP.get(primary, _INTENT_AGENT_MAP["general"]))
     # Always include scheme_agent if not already present
@@ -176,51 +185,49 @@ async def parse_intent(state: dict) -> dict:
 # ---------------------------------------------------------------------------
 
 async def run_agents(state: dict) -> dict:
-    """Run all selected agents in parallel with a 5-second timeout each."""
+    """Run agents in three waves so later agents can use earlier results."""
     s = _dict_to_state(state)
-
-    # Build context from any already-completed agent responses
     context = {aid: msg.output_data for aid, msg in s.agent_responses.items()}
+
+    WAVE_1 = ["soil_agent", "weather_agent", "pest_disease_agent"]
+    WAVE_2 = ["crop_agent", "mandi_agent", "scheme_agent"]
+    WAVE_3 = ["finance_agent"]
 
     async def _run_one(agent_id: str) -> tuple[str, AgentMessage]:
         agent_cls = AGENT_REGISTRY.get(agent_id)
         if not agent_cls:
             return agent_id, AgentMessage(
                 agent_id=agent_id, query_id=s.query.query_id,
-                error=f"Unknown agent: {agent_id}", fallback_triggered=True,
+                output_data={"error": "Agent not found"}, fallback_triggered=True,
             )
         agent = agent_cls()
         try:
             result = await asyncio.wait_for(
-                agent.run(s.query, s.farmer, context),
-                timeout=5.0,
+                agent.run(s.query, s.farmer, context), timeout=5.0,
             )
             return agent_id, result
         except asyncio.TimeoutError:
             return agent_id, AgentMessage(
                 agent_id=agent_id, query_id=s.query.query_id,
-                output_data={"error": "Agent timed out after 5s"},
-                fallback_triggered=True, error="timeout",
+                output_data={"status": "timeout"}, fallback_triggered=True, error="timeout",
             )
         except Exception as exc:
             return agent_id, AgentMessage(
                 agent_id=agent_id, query_id=s.query.query_id,
-                output_data={"error": str(exc)},
-                fallback_triggered=True, error=str(exc),
+                output_data={"error": str(exc)}, fallback_triggered=True, error=str(exc),
             )
 
-    tasks = [_run_one(aid) for aid in s.agents_to_invoke if aid != "voice_agent"]
-    results = await asyncio.gather(*tasks)
+    all_agents = s.agents_to_invoke
+    for wave in [WAVE_1, WAVE_2, WAVE_3]:
+        wave_agents = [aid for aid in wave if aid in all_agents and aid != "voice_agent"]
+        if not wave_agents:
+            continue
+        results = await asyncio.gather(*[_run_one(aid) for aid in wave_agents])
+        for agent_id, msg in results:
+            s.agent_responses[agent_id] = msg
+            context[agent_id] = msg.output_data  # now available for next wave
 
-    for agent_id, msg in results:
-        s.agent_responses[agent_id] = msg
-        context[agent_id] = msg.output_data  # update context for dependent agents
-
-    s.audit_log.append({
-        "node": "run_agents",
-        "agents_run": [aid for aid, _ in results],
-        "timeouts": [aid for aid, m in results if m.fallback_triggered],
-    })
+    s.audit_log.append({"node": "run_agents", "agents_run": list(s.agent_responses.keys())})
     return _state_to_dict(s)
 
 

@@ -22,6 +22,36 @@ from backend.db.models import MandiPriceCacheDB, SchemeDB, SessionLocal
 from backend.schemas import AgentMessage, FarmerProfile, FarmerQuery, Intent
 
 
+def _extract_json(raw: str) -> dict:
+    """Safely extract JSON from LLM response, handling markdown fences."""
+    # Strip markdown fences first
+    text = raw.strip()
+    if text.startswith("```"):
+        lines = text.split("\n")
+        text = "\n".join(lines[1:-1] if lines[-1].strip() == "```" else lines[1:])
+    # Try direct parse
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        pass
+    # Find first complete JSON object using brace counting
+    depth = 0
+    start = None
+    for i, ch in enumerate(text):
+        if ch == "{":
+            if start is None:
+                start = i
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0 and start is not None:
+                try:
+                    return json.loads(text[start:i+1])
+                except json.JSONDecodeError:
+                    start = None
+    return {"raw_response": raw[:500]}
+
+
 # ╔══════════════════════════════════════════════════════════════════════════╗
 # ║  1. KrishiVoiceAgent — keyword-based intent classifier                 ║
 # ╚══════════════════════════════════════════════════════════════════════════╝
@@ -168,11 +198,7 @@ class SoilIntelligenceAgent(BaseKrishiAgent):
             ])
             raw = resp.content
             # Attempt to parse JSON from response
-            try:
-                data = json.loads(raw)
-            except json.JSONDecodeError:
-                json_match = re.search(r"\{.*\}", raw, re.DOTALL)
-                data = json.loads(json_match.group()) if json_match else {"raw_response": raw}
+            data = _extract_json(raw)
 
             # Enforce urea hard-rule
             flags: List[str] = []
@@ -251,11 +277,7 @@ class CropAdvisoryAgent(BaseKrishiAgent):
                 HumanMessage(content=human_msg),
             ])
             raw = resp.content
-            try:
-                data = json.loads(raw)
-            except json.JSONDecodeError:
-                json_match = re.search(r"\{.*\}", raw, re.DOTALL)
-                data = json.loads(json_match.group()) if json_match else {"raw_response": raw}
+            data = _extract_json(raw)
 
             return self._build_message(
                 query_id=query.query_id,
@@ -341,11 +363,7 @@ class PestDiseaseAgent(BaseKrishiAgent):
         try:
             resp = await self.llm.ainvoke(messages)
             raw = resp.content
-            try:
-                data = json.loads(raw)
-            except json.JSONDecodeError:
-                json_match = re.search(r"\{.*\}", raw, re.DOTALL)
-                data = json.loads(json_match.group()) if json_match else {"raw_response": raw}
+            data = _extract_json(raw)
 
             return self._build_message(
                 query_id=query.query_id,
@@ -437,11 +455,7 @@ class WeatherClimateAgent(BaseKrishiAgent):
                 HumanMessage(content=human_msg),
             ])
             raw = resp.content
-            try:
-                data = json.loads(raw)
-            except json.JSONDecodeError:
-                json_match = re.search(r"\{.*\}", raw, re.DOTALL)
-                data = json.loads(json_match.group()) if json_match else {"raw_response": raw}
+            data = _extract_json(raw)
 
             return self._build_message(
                 query_id=query.query_id,
@@ -554,11 +568,7 @@ class MandiMarketAgent(BaseKrishiAgent):
                 HumanMessage(content=human_msg),
             ])
             raw = resp.content
-            try:
-                data = json.loads(raw)
-            except json.JSONDecodeError:
-                json_match = re.search(r"\{.*\}", raw, re.DOTALL)
-                data = json.loads(json_match.group()) if json_match else {"raw_response": raw}
+            data = _extract_json(raw)
 
             # Store crop & best price for compliance layer
             data["crop"] = crop
@@ -726,11 +736,7 @@ class FarmFinanceAgent(BaseKrishiAgent):
                 HumanMessage(content=human_msg),
             ])
             raw = resp.content
-            try:
-                data = json.loads(raw)
-            except json.JSONDecodeError:
-                json_match = re.search(r"\{.*\}", raw, re.DOTALL)
-                data = json.loads(json_match.group()) if json_match else {"raw_response": raw}
+            data = _extract_json(raw)
 
             return self._build_message(
                 query_id=query.query_id,
