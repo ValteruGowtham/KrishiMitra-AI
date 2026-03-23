@@ -11,7 +11,7 @@ from datetime import datetime
 from typing import List, Optional
 
 import aiofiles
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Body, Depends, File, Form, HTTPException, Query, UploadFile
 from sqlalchemy.orm import Session
 
 from backend.db.models import (
@@ -23,6 +23,7 @@ from backend.db.models import (
     get_db,
 )
 from backend.orchestrator.orchestrator import run_orchestrator
+from backend.services.sarvam import SUPPORTED_LANGUAGES, synthesise_speech, transcribe_audio
 from backend.schemas import (
     AdvisoryResponse,
     Channel,
@@ -49,6 +50,7 @@ class AdvisoryRequest(BaseModel):
     farmer_id: str
     text_input: str
     language: str = "hi"
+    language_code: str = "hi-IN"
     channel: str = "app"
 
 
@@ -64,6 +66,8 @@ async def create_advisory(req: AdvisoryRequest):
         farmer_id=req.farmer_id,
         raw_input=req.text_input,
         channel=channel,
+        language_code=req.language_code,
+        language_label=req.language if req.language else "hi-IN",
     )
     result = await run_orchestrator(query)
     return result
@@ -77,7 +81,7 @@ async def create_advisory(req: AdvisoryRequest):
 async def create_advisory_with_photo(
     farmer_id: str = Form(...),
     text_input: str = Form(...),
-    language: str = Form("hi"),
+    language: str = Form("hi-IN"),
     photo: UploadFile = File(...),
 ):
     """Run orchestrator with an uploaded photo (pest/disease diagnosis)."""
@@ -95,6 +99,7 @@ async def create_advisory_with_photo(
         raw_input=text_input,
         image_path=filepath,
         channel=Channel.WEB,
+        language_code=language,
     )
     result = await run_orchestrator(query)
     return result
@@ -291,6 +296,73 @@ async def list_schemes(
         })
 
     return results
+
+
+# ╔══════════════════════════════════════════════════════════════════════════╗
+# ║  GET /languages — supported language list                             ║
+# ╚══════════════════════════════════════════════════════════════════════════╝
+
+@router.get("/languages")
+async def list_supported_languages():
+    """Return all Sarvam-supported Indian languages for the frontend selector."""
+    return {
+        "languages": [
+            {"code": code, "label": label}
+            for code, label in SUPPORTED_LANGUAGES.items()
+        ]
+    }
+
+
+# ╔══════════════════════════════════════════════════════════════════════════╗
+# ║  POST /stt — speech to text                                           ║
+# ╚══════════════════════════════════════════════════════════════════════════╝
+
+@router.post("/stt")
+async def speech_to_text(
+    audio: UploadFile = File(...),
+    language_code: str = Form("hi-IN"),
+):
+    """
+    Receive an audio file from the browser (WebM/WAV/MP3),
+    send to Sarvam saarika:v1, return transcript.
+    """
+    audio_bytes = await audio.read()
+    result = await transcribe_audio(
+        audio_bytes=audio_bytes,
+        language_code=language_code,
+        filename=audio.filename or "audio.webm",
+    )
+    if result.get("error"):
+        raise HTTPException(status_code=502, detail=f"STT failed: {result['error']}")
+    return {
+        "transcript": result["transcript"],
+        "language_code": result["language_code"],
+    }
+
+
+class TTSRequest(BaseModel):
+    text: str
+    language_code: str = "hi-IN"
+
+
+@router.post("/tts")
+async def text_to_speech(req: TTSRequest):
+    """
+    Receive advisory text + language code,
+    return Sarvam bulbul:v1 audio as base64 WAV string.
+    """
+    if not req.text.strip():
+        raise HTTPException(status_code=400, detail="text field is required")
+    result = await synthesise_speech(
+        text=req.text,
+        language_code=req.language_code,
+    )
+    if result.get("error"):
+        raise HTTPException(status_code=502, detail=f"TTS failed: {result['error']}")
+    return {
+        "audio_base64": result["audio_base64"],
+        "language_code": result["language_code"],
+    }
 
 
 # ╔══════════════════════════════════════════════════════════════════════════╗

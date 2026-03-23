@@ -18,6 +18,7 @@ import aiohttp
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from backend.agents.base import BaseKrishiAgent
+from backend.llm_factory import get_openai_llm, get_gemini_pro_llm, get_gemini_flash_llm
 from backend.db.models import MandiPriceCacheDB, SchemeDB, SessionLocal
 from backend.schemas import AgentMessage, FarmerProfile, FarmerQuery, Intent
 
@@ -63,6 +64,10 @@ class KrishiVoiceAgent(BaseKrishiAgent):
     """
 
     AGENT_ID = "voice_agent"
+
+    def __init__(self) -> None:
+        super().__init__()
+        # No LLM needed — keyword-based classification only
 
     _INTENT_KEYWORDS: Dict[Intent, List[str]] = {
         Intent.SOIL_HEALTH: [
@@ -149,6 +154,10 @@ class SoilIntelligenceAgent(BaseKrishiAgent):
 
     AGENT_ID = "soil_agent"
 
+    def __init__(self) -> None:
+        super().__init__()
+        self.llm = get_openai_llm()
+
     _OPTIMAL_RANGES = {
         "N": (240, 280), "P": (20, 30), "K": (200, 250),
         "pH": (6.0, 7.5), "organic_matter": (2.0, 5.0),
@@ -181,7 +190,7 @@ class SoilIntelligenceAgent(BaseKrishiAgent):
             "HARD RULE: Never recommend more than 120 kg urea per acre. "
             "Return a JSON object with keys: nutrient_status (dict), "
             "fertilizer_recommendations (list of {product, kg_per_acre, timing}), "
-            "application_timing, ph_advice, summary_hindi."
+            "application_timing, ph_advice, summary_local (a 2-3 sentence summary in the farmer's own language — use the language of the farmer's question)."
         )
 
         human_msg = (
@@ -243,6 +252,10 @@ class CropAdvisoryAgent(BaseKrishiAgent):
 
     AGENT_ID = "crop_agent"
 
+    def __init__(self) -> None:
+        super().__init__()
+        self.llm = get_gemini_pro_llm()
+
     async def run(
         self,
         query: FarmerQuery,
@@ -259,7 +272,7 @@ class CropAdvisoryAgent(BaseKrishiAgent):
             "Only recommend state-approved crop varieties. "
             "Return a JSON object with keys: growth_stage, next_7_day_actions (list of strings), "
             "sowing_window, variety_recommendations (list), expected_yield_range, "
-            "risk_alert, summary_hindi."
+            "risk_alert, summary_local (a 2-3 sentence summary in the farmer's own language — use the language of the farmer's question)."
         )
 
         human_msg = (
@@ -312,6 +325,10 @@ class PestDiseaseAgent(BaseKrishiAgent):
 
     AGENT_ID = "pest_disease_agent"
 
+    def __init__(self) -> None:
+        super().__init__()
+        self.llm = get_openai_llm()
+
     async def run(
         self,
         query: FarmerQuery,
@@ -326,7 +343,7 @@ class PestDiseaseAgent(BaseKrishiAgent):
             "harvest safety interval (PHI). "
             "Return JSON with keys: diagnoses (list of {name, confidence_pct, severity_1_to_5}), "
             "spread_risk, biological_treatment, chemical_treatment "
-            "(with product, dose, phi_days), prevention, summary_hindi."
+            "(with product, dose, phi_days), prevention, summary_local (a 2-3 sentence summary in the farmer's own language — use the language of the farmer's question)."
         )
 
         messages: list = [SystemMessage(content=system_prompt)]
@@ -398,6 +415,10 @@ class WeatherClimateAgent(BaseKrishiAgent):
 
     AGENT_ID = "weather_agent"
 
+    def __init__(self) -> None:
+        super().__init__()
+        self.llm = get_gemini_flash_llm()
+
     _DEMO_FORECAST = [
         {"day": 1, "date": "tomorrow", "temp_max": 38, "temp_min": 22, "humidity": 35, "condition": "Clear sky", "wind_kmh": 12, "rain_mm": 0},
         {"day": 2, "date": "day_2", "temp_max": 39, "temp_min": 23, "humidity": 30, "condition": "Hazy sunshine", "wind_kmh": 15, "rain_mm": 0},
@@ -439,7 +460,7 @@ class WeatherClimateAgent(BaseKrishiAgent):
             "DON'T just report weather — translate each day into a SPECIFIC farming action. "
             "Return JSON with keys: forecast_summary, "
             "farming_actions (list of {day, weather, specific_action, urgency}), "
-            "spray_advisory, irrigation_advisory, risk_alert, summary_hindi."
+            "spray_advisory, irrigation_advisory, risk_alert, summary_local (a 2-3 sentence summary in the farmer's own language — use the language of the farmer's question)."
         )
 
         human_msg = (
@@ -490,6 +511,10 @@ class MandiMarketAgent(BaseKrishiAgent):
 
     AGENT_ID = "mandi_agent"
 
+    def __init__(self) -> None:
+        super().__init__()
+        self.llm = get_gemini_pro_llm()
+
     _MSP_TABLE = {
         "wheat": 2275, "paddy": 2300, "mustard": 5950,
         "cotton": 7121, "maize": 2090, "soybean": 4892,
@@ -510,22 +535,61 @@ class MandiMarketAgent(BaseKrishiAgent):
         {"commodity": "mustard", "market": "Udaipur Mandi", "state": "Rajasthan", "district": "Udaipur", "min_price": 5750, "max_price": 6150, "modal_price": 5950},
     ]
 
-    async def _fetch_agmarknet(self, commodity: str, state: str) -> Optional[list]:
-        """Attempt AgMarkNet API with 3s timeout."""
-        api_key = os.getenv("AGMARKNET_API_KEY", "")
-        if not api_key:
+    async def _fetch_datagovin(self, commodity: str, state: str) -> Optional[list]:
+        """
+        Fetch mandi prices from data.gov.in AgMarkNet dataset.
+        Returns a list of price dicts matching the demo data schema, or None on failure.
+        """
+        api_key = os.getenv("DATA_GOV_IN_API_KEY", "")
+        resource_id = os.getenv("DATA_GOV_IN_RESOURCE_ID", "")
+        if not api_key or not resource_id:
             return None
-        url = f"https://api.agmarknet.gov.in/prices?commodity={commodity}&state={state}"
+
+        url = "https://api.data.gov.in/resource/{resource_id}".format(
+            resource_id=resource_id
+        )
+        params = {
+            "api-key": api_key,
+            "format": "json",
+            "filters[state]": state,
+            "filters[commodity]": commodity.capitalize(),
+            "limit": "50",
+        }
+
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.get(
-                    url, headers={"X-API-Key": api_key}, timeout=aiohttp.ClientTimeout(total=3)
+                    url,
+                    params=params,
+                    timeout=aiohttp.ClientTimeout(total=5),
                 ) as resp:
-                    if resp.status == 200:
-                        return await resp.json()
+                    if resp.status != 200:
+                        return None
+                    data = await resp.json()
+                    records = data.get("records", [])
+                    if not records:
+                        return None
+
+                    # Normalise field names to match the demo data schema used
+                    # by the rest of MandiMarketAgent (commodity, market, state,
+                    # district, min_price, max_price, modal_price)
+                    normalised = []
+                    for r in records:
+                        try:
+                            normalised.append({
+                                "commodity": r.get("commodity", commodity).lower(),
+                                "market": r.get("market", ""),
+                                "state": r.get("state", state),
+                                "district": r.get("district", ""),
+                                "min_price": float(r.get("min_price", 0) or 0),
+                                "max_price": float(r.get("max_price", 0) or 0),
+                                "modal_price": float(r.get("modal_price", 0) or 0),
+                            })
+                        except (ValueError, TypeError):
+                            continue
+                    return normalised if normalised else None
         except Exception:
-            pass
-        return None
+            return None
 
     async def run(
         self,
@@ -535,7 +599,7 @@ class MandiMarketAgent(BaseKrishiAgent):
     ) -> AgentMessage:
         crop = (farmer.current_crop or "wheat").lower()
 
-        prices = await self._fetch_agmarknet(crop, farmer.state)
+        prices = await self._fetch_datagovin(crop, farmer.state)
         fallback = prices is None
         if fallback:
             prices = [p for p in self._DEMO_PRICES if p["commodity"] == crop]
@@ -551,7 +615,7 @@ class MandiMarketAgent(BaseKrishiAgent):
             "Analyse the mandi price data and give selling advice. "
             "Include MSP comparison and negotiation tips. "
             "Return JSON with keys: best_mandi, transport_estimate, net_price, "
-            "msp_comparison, sell_timing_recommendation, negotiation_tip, summary_hindi."
+            "msp_comparison, sell_timing_recommendation, negotiation_tip, summary_local (a 2-3 sentence summary in the farmer's own language — use the language of the farmer's question)."
         )
 
         human_msg = (
@@ -578,11 +642,11 @@ class MandiMarketAgent(BaseKrishiAgent):
                 query_id=query.query_id,
                 output_data=data,
                 confidence=0.70 if fallback else 0.90,
-                data_sources=["agmarknet_demo" if fallback else "agmarknet_api", "gpt-4o"],
+                data_sources=["demo_mandi_data" if fallback else "data_gov_in_api", "gpt-4o"],
                 reasoning_chain=[
                     f"Crop: {crop}, MSP: ₹{msp}/q",
                     f"Best mandi: {best.get('market', 'N/A')} @ ₹{best_price}/q",
-                    f"AgMarkNet API: {'fallback' if fallback else 'live'}",
+                    f"data.gov.in API: {'fallback to demo data' if fallback else 'live'}",
                 ],
                 fallback_triggered=fallback,
                 compliance_flags=[f"BELOW_MSP:{crop}" for _ in [1] if best_price < msp and best_price > 0],
@@ -608,6 +672,10 @@ class GovernmentSchemeAgent(BaseKrishiAgent):
     """
 
     AGENT_ID = "scheme_agent"
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.llm = get_gemini_flash_llm()
 
     def _check_eligibility(self, scheme_row: SchemeDB, farmer: FarmerProfile) -> bool:
         """Simple rule-based eligibility check."""
@@ -660,7 +728,12 @@ class GovernmentSchemeAgent(BaseKrishiAgent):
             scheme_names = [s["name"] for s in eligible[:5]]
             try:
                 resp = await self.llm.ainvoke([
-                    SystemMessage(content="Briefly summarise these government schemes in simple Hindi for a farmer. 2-3 lines only."),
+                    SystemMessage(content=(
+                        "Briefly summarise these government schemes for a farmer. "
+                        "Write 2-3 lines ONLY. "
+                        "Detect the language of the scheme names or use Hindi if uncertain. "
+                        "Always respond in simple, easy-to-understand language."
+                    )),
                     HumanMessage(content=f"Eligible schemes: {', '.join(scheme_names)}. Total unclaimed benefit: ₹{total_benefit:,.0f}"),
                 ])
                 summary_hindi = resp.content
@@ -701,6 +774,10 @@ class FarmFinanceAgent(BaseKrishiAgent):
 
     AGENT_ID = "finance_agent"
 
+    def __init__(self) -> None:
+        super().__init__()
+        self.llm = get_gemini_pro_llm()
+
     async def run(
         self,
         query: FarmerQuery,
@@ -717,7 +794,7 @@ class FarmFinanceAgent(BaseKrishiAgent):
             "HARD RULE: only recommend government/NABARD loans, NEVER private lenders or microfinance at high interest. "
             "Return JSON with keys: input_cost_per_acre, expected_revenue, "
             "break_even_yield, net_profit_estimate, financial_risk_level (low/medium/high), "
-            "kcc_advice, fasal_bima_advice, summary_hindi."
+            "kcc_advice, fasal_bima_advice, summary_local (a 2-3 sentence summary in the farmer's own language — use the language of the farmer's question)."
         )
 
         human_msg = (

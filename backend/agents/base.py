@@ -4,16 +4,10 @@ KrishiMitra AI — Abstract base class for all specialised agents.
 
 from __future__ import annotations
 
-import os
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional
 
-from dotenv import load_dotenv
-from langchain_openai import ChatOpenAI
-
 from backend.schemas import AgentMessage, FarmerProfile, FarmerQuery
-
-load_dotenv()
 
 
 class BaseKrishiAgent(ABC):
@@ -29,11 +23,11 @@ class BaseKrishiAgent(ABC):
     AGENT_ID: str = "base_agent"
 
     def __init__(self) -> None:
-        self.llm = ChatOpenAI(
-            model="gpt-4o",
-            temperature=0.1,
-            api_key=os.getenv("OPENAI_API_KEY"),
-        )
+        """
+        Subclasses must assign self.llm after calling super().__init__().
+        Use the factory functions in backend.llm_factory to get the correct model.
+        """
+        self.llm = None
 
     # ------------------------------------------------------------------
     # Abstract interface

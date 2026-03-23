@@ -13,6 +13,20 @@ import '../App.css'
 
 const API_BASE = 'http://localhost:8000/api/v1'
 
+const LANGUAGES = [
+  { code: 'hi-IN', label: 'हिंदी', full: 'हिंदी (Hindi)' },
+  { code: 'bn-IN', label: 'বাংলা', full: 'বাংলা (Bengali)' },
+  { code: 'te-IN', label: 'తెలుగు', full: 'తెలుగు (Telugu)' },
+  { code: 'mr-IN', label: 'मराठी', full: 'मराठी (Marathi)' },
+  { code: 'ta-IN', label: 'தமிழ்', full: 'தமிழ் (Tamil)' },
+  { code: 'gu-IN', label: 'ગુજ', full: 'ગુજરાતી (Gujarati)' },
+  { code: 'kn-IN', label: 'ಕನ್ನಡ', full: 'ಕನ್ನಡ (Kannada)' },
+  { code: 'od-IN', label: 'ଓଡ଼ିଆ', full: 'ଓଡ଼ିଆ (Odia)' },
+  { code: 'pa-IN', label: 'ਪੰਜਾਬੀ', full: 'ਪੰਜਾਬੀ (Punjabi)' },
+  { code: 'ml-IN', label: 'മലയാളം', full: 'മലയാളം (Malayalam)' },
+  { code: 'en-IN', label: 'English', full: 'English (India)' },
+]
+
 const DISTRESS_KEYWORDS = ['jeena nahi chahta', 'karz se tang', 'sab khatam', 'jaan de dunga',
   'कर्ज से तंग', 'जीना नहीं', 'सब खत्म', 'जान दे दूँगा', 'मर जाना', 'आत्महत्या']
 
@@ -34,13 +48,13 @@ const AGENT_REASONING = {
 
 
 
-function FarmerInputPanel({ onSubmit, isLoading, photoFile, setPhotoFile, photoPreview, setPhotoPreview }) {
+function FarmerInputPanel({ onSubmit, isLoading, photoFile, setPhotoFile, photoPreview, setPhotoPreview, selectedLang, setSelectedLang }) {
   const [textInput, setTextInput] = useState('')
   const [isRecording, setIsRecording] = useState(false)
-  const [interimText, setInterimText] = useState('')
-  const [speechError, setSpeechError] = useState('')
-  const [speechLang, setSpeechLang] = useState('hi-IN')
-  const recognitionRef = useRef(null)
+  const [recordingError, setRecordingError] = useState('')
+  const [isTranscribing, setIsTranscribing] = useState(false)
+  const mediaRecorderRef = useRef(null)
+  const audioChunksRef = useRef([])
   const fileInputRef = useRef(null)
 
   const demoFarmer = {
@@ -51,62 +65,57 @@ function FarmerInputPanel({ onSubmit, isLoading, photoFile, setPhotoFile, photoP
     language: 'Hindi',
   }
 
-  useEffect(() => {
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
-    if (!SpeechRecognition) return
-    const recognition = new SpeechRecognition()
-    recognition.continuous = false
-    recognition.interimResults = true
-    recognitionRef.current = recognition
-  }, [])
-
-  const toggleRecording = () => {
-    if (!recognitionRef.current) {
-      setSpeechError('Speech API not supported in this browser.')
-      return
-    }
+  const toggleRecording = async () => {
     if (isRecording) {
-      recognitionRef.current.stop()
+      mediaRecorderRef.current?.stop()
       return
     }
-    recognitionRef.current.lang = speechLang
-    recognitionRef.current.onstart = () => {
-      setIsRecording(true)
-      setSpeechError('')
-      setInterimText('')
-    }
-    recognitionRef.current.onresult = (event) => {
-      let interim = ''
-      let final = ''
-      for (let i = event.resultIndex; i < event.results.length; ++i) {
-        if (event.results[i].isFinal) {
-          final += event.results[i][0].transcript
-        } else {
-          interim += event.results[i][0].transcript
+    setRecordingError('')
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+        ? 'audio/webm;codecs=opus'
+        : 'audio/webm'
+      const recorder = new MediaRecorder(stream, { mimeType })
+      audioChunksRef.current = []
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) audioChunksRef.current.push(e.data)
+      }
+      recorder.onstop = async () => {
+        stream.getTracks().forEach(t => t.stop())
+        setIsRecording(false)
+        const audioBlob = new Blob(audioChunksRef.current, { type: mimeType })
+        setIsTranscribing(true)
+        try {
+          const formData = new FormData()
+          formData.append('audio', audioBlob, 'recording.webm')
+          formData.append('language_code', selectedLang)
+          const res = await axios.post(`${API_BASE}/stt`, formData, {
+            headers: { 'Content-Type': 'multipart/form-data' },
+          })
+          const transcript = res.data.transcript
+          if (transcript) {
+            setTextInput(prev => (prev + ' ' + transcript).trim())
+            setTimeout(() => onSubmit(transcript, null), 800)
+          } else {
+            setRecordingError('No speech detected. Please try again.')
+          }
+        } catch (err) {
+          setRecordingError('Transcription failed. Check your API key.')
+        } finally {
+          setIsTranscribing(false)
         }
       }
-      setInterimText(interim)
-      if (final) {
-        const newText = final.trim()
-        setTextInput(prev => (prev + ' ' + newText).trim())
-        setTimeout(() => onSubmit(newText, null), 1000)
+      recorder.onerror = () => {
+        setIsRecording(false)
+        setRecordingError('Recording error. Please try again.')
       }
+      mediaRecorderRef.current = recorder
+      recorder.start()
+      setIsRecording(true)
+    } catch (err) {
+      setRecordingError('Microphone access denied. Please allow microphone.')
     }
-    recognitionRef.current.onerror = (event) => {
-      if (event.error === 'not-allowed') {
-        setSpeechError('Please allow microphone access / माइक्रोफोन की अनुमति दें')
-      } else if (event.error === 'no-speech') {
-        setSpeechError('Please try again / फिर से बोलें')
-      } else {
-        setSpeechError(`Error: ${event.error}`)
-      }
-      setIsRecording(false)
-    }
-    recognitionRef.current.onend = () => {
-      setIsRecording(false)
-      setInterimText('')
-    }
-    try { recognitionRef.current.start() } catch (e) { console.error(e) }
   }
 
   const handlePhotoSelect = (e) => {
@@ -162,17 +171,24 @@ function FarmerInputPanel({ onSubmit, isLoading, photoFile, setPhotoFile, photoP
 
       {/* Voice + Camera Input Area */}
       <div className="flex flex-col items-center justify-center mb-5 relative shrink-0 mt-2">
-        <div className="flex items-center gap-3 mb-4">
-           <div className="flex bg-surface rounded-lg p-1 border border-border shadow-sm">
-             <button type="button"
-                onClick={() => setSpeechLang('hi-IN')}
-                className={`px-3 py-1 rounded text-[10px] uppercase font-bold transition-all cursor-pointer ${speechLang === 'hi-IN' ? 'bg-primary text-white shadow' : 'text-muted hover:text-dark'}`}
-             >HI</button>
-             <button type="button"
-                onClick={() => setSpeechLang('en-IN')}
-                className={`px-3 py-1 rounded text-[10px] uppercase font-bold transition-all cursor-pointer ${speechLang === 'en-IN' ? 'bg-primary text-white shadow' : 'text-muted hover:text-dark'}`}
-             >EN</button>
-           </div>
+        <div className="w-full mb-4">
+          <p className="text-[9px] uppercase font-bold text-muted tracking-widest mb-2">भाषा चुनें / Select Language</p>
+          <div className="flex flex-wrap gap-1.5 justify-center">
+            {LANGUAGES.map((lang) => (
+              <button
+                key={lang.code}
+                type="button"
+                onClick={() => setSelectedLang(lang.code)}
+                className={`px-2.5 py-1.5 rounded-lg text-[11px] font-bold transition-all border cursor-pointer ${
+                  selectedLang === lang.code
+                    ? 'bg-primary text-white border-primary shadow-md scale-105'
+                    : 'bg-white text-dark border-border hover:border-primary/50 hover:bg-primary/5'
+                }`}
+              >
+                {lang.label}
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* Mic + Camera buttons side by side */}
@@ -246,21 +262,20 @@ function FarmerInputPanel({ onSubmit, isLoading, photoFile, setPhotoFile, photoP
 
         {/* Live transcript / speech status */}
         <div className="mt-3 text-center min-h-[32px] flex flex-col items-center justify-start w-full max-w-[280px]">
-          {speechError ? (
+          {recordingError ? (
             <p className="text-[10px] text-danger font-bold bg-danger/10 px-3 py-1.5 rounded-lg border border-danger/20">
-              {speechError}
+              {recordingError}
+            </p>
+          ) : isTranscribing ? (
+            <p className="text-[10px] text-primary font-bold animate-pulse flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-primary animate-pulse"></span>
+              Transcribing... / लिख रहा हूँ...
             </p>
           ) : isRecording ? (
-            <>
-              <p className="text-[10px] text-danger font-bold uppercase tracking-wider mb-1.5 animate-pulse flex items-center justify-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-danger"></span> सुन रहा हूँ... / Listening...
-              </p>
-              {interimText && (
-                <p className="text-sm font-medium text-dark/80 italic break-words text-center leading-snug">
-                  "{interimText}"
-                </p>
-              )}
-            </>
+            <p className="text-[10px] text-danger font-bold uppercase tracking-wider animate-pulse flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-danger"></span>
+              Recording... बोलते रहें
+            </p>
           ) : null}
         </div>
       </div>
@@ -417,41 +432,19 @@ function DistressCrisisCard() {
   )
 }
 
-function AdvisoryOutputPanel({ result, isLoading, photoPreview, distressMode }) {
+function AdvisoryOutputPanel({ result, isLoading, photoPreview, distressMode, selectedLang }) {
   const [showHindi, setShowHindi] = useState(true)
   const [isSpeaking, setIsSpeaking] = useState(false)
+  const audioRef = useRef(null)
 
   useEffect(() => {
     return () => {
-      if (window.speechSynthesis) window.speechSynthesis.cancel()
+      if (audioRef.current) {
+        audioRef.current.pause()
+        audioRef.current = null
+      }
     }
   }, [])
-
-  // Auto-read effect — MUST be above early return to satisfy Rules of Hooks
-  useEffect(() => {
-    if (result && result.advisory_text) {
-      const text = result.advisory_text
-      const t = setTimeout(() => {
-        if (!window.speechSynthesis || !text) return
-        window.speechSynthesis.cancel()
-        let cleanText = text.replace(/[*_#`~>|-]/g, ' ').replace(/\n/g, ' ')
-        const sentences = cleanText.split(/(?<=[।.?!])\s+/)
-        cleanText = sentences.slice(0, 3).join(' ')
-        const utterance = new SpeechSynthesisUtterance(cleanText.trim())
-        utterance.lang = 'hi-IN'
-        utterance.rate = 0.85
-        utterance.pitch = 1.0
-        const voices = window.speechSynthesis.getVoices()
-        const femaleVoice = voices.find(v => v.lang.includes('hi') && (v.name.includes('Female') || v.name.includes('Google')))
-        if (femaleVoice) utterance.voice = femaleVoice
-        utterance.onstart = () => setIsSpeaking(true)
-        utterance.onend = () => setIsSpeaking(false)
-        utterance.onerror = () => setIsSpeaking(false)
-        window.speechSynthesis.speak(utterance)
-      }, 500)
-      return () => clearTimeout(t)
-    }
-  }, [result])
 
   if (!result && !isLoading) {
     return <EmptyState />
@@ -463,50 +456,64 @@ function AdvisoryOutputPanel({ result, isLoading, photoPreview, distressMode }) 
     return <DistressCrisisCard />
   }
 
-  let englishText = result?.advisory_text || ''
-  let hindiText = ''
-  
-  if (result?.advisory_text) {
-    const parts = result.advisory_text.split(/(?:सारांश हिंदी में|संक्षिप्त हिंदी|हिंदी अनुवाद):/)
-    if (parts.length > 1) {
-      englishText = parts[0].trim()
-      hindiText = parts[1].trim()
-    } else {
-      hindiText = result.advisory_text
-    }
+  // Advisory now arrives in the farmer's chosen language.
+  // Split on 'English Summary' section if present; show full text by default.
+  let mainText = result?.advisory_text || ''
+  let englishSummary = ''
+
+  const summaryMatch = mainText.match(/(?:English Summary|English\s*Summary\s*:)([\s\S]*)$/i)
+  if (summaryMatch) {
+    mainText = mainText.slice(0, summaryMatch.index).trim()
+    englishSummary = summaryMatch[1].trim()
   }
 
-  const displayMarkdown = showHindi && hindiText ? hindiText : englishText
+  const displayMarkdown = showHindi ? mainText : (englishSummary || mainText)
 
   const stopSpeaking = () => {
-    if (window.speechSynthesis) {
-      window.speechSynthesis.cancel()
+    if (audioRef.current) {
+      audioRef.current.pause()
+      audioRef.current = null
+    }
+    setIsSpeaking(false)
+  }
+
+  const startSpeaking = async (textToRead) => {
+    if (!textToRead) return
+    stopSpeaking()
+    setIsSpeaking(true)
+    // Trim to first 3 sentences for preview
+    const sentences = textToRead.replace(/[*_#`~>|-]/g, ' ').split(/(?<=[।.?!])\s+/)
+    const preview = sentences.slice(0, 3).join(' ').trim().slice(0, 500)
+    try {
+      const res = await axios.post(`${API_BASE}/tts`, {
+        text: preview,
+        language_code: selectedLang || 'hi-IN',
+      })
+      const audioBase64 = res.data.audio_base64
+      if (!audioBase64) { setIsSpeaking(false); return }
+      const audioBytes = Uint8Array.from(atob(audioBase64), c => c.charCodeAt(0))
+      const blob = new Blob([audioBytes], { type: 'audio/wav' })
+      const url = URL.createObjectURL(blob)
+      const audio = new Audio(url)
+      audioRef.current = audio
+      audio.onended = () => { setIsSpeaking(false); URL.revokeObjectURL(url) }
+      audio.onerror = () => { setIsSpeaking(false) }
+      audio.play()
+    } catch {
       setIsSpeaking(false)
     }
   }
 
-  const startSpeaking = (textToRead, limitSentences = false, forceLang = null) => {
-    if (!window.speechSynthesis || !textToRead) return
-    window.speechSynthesis.cancel()
-    let cleanText = textToRead.replace(/[*_#`~>|-]/g, ' ').replace(/\n/g, ' ')
-    if (limitSentences) {
-      const sentences = cleanText.split(/(?<=[।.?!])\s+/)
-      cleanText = sentences.slice(0, 3).join(' ')
+  // Auto-play first 3 sentences when result arrives
+  useEffect(() => {
+    if (result?.advisory_text && !result?.distress_alert) {
+      const t = setTimeout(() => {
+        const display = result.advisory_text
+        startSpeaking(display)
+      }, 600)
+      return () => clearTimeout(t)
     }
-    const utterance = new SpeechSynthesisUtterance(cleanText.trim())
-    const lang = forceLang || (showHindi ? 'hi-IN' : 'en-IN')
-    utterance.lang = lang
-    utterance.rate = 0.85
-    utterance.pitch = 1.0
-    const voices = window.speechSynthesis.getVoices()
-    const targetVoiceLang = lang.split('-')[0]
-    const femaleVoice = voices.find(v => v.lang.includes(targetVoiceLang) && (v.name.includes('Female') || v.name.includes('Google')))
-    if (femaleVoice) utterance.voice = femaleVoice
-    utterance.onstart = () => setIsSpeaking(true)
-    utterance.onend = () => setIsSpeaking(false)
-    utterance.onerror = () => setIsSpeaking(false)
-    window.speechSynthesis.speak(utterance)
-  }
+  }, [result])
 
   return (
     <div className="flex flex-col h-full bg-white relative animate-fade-in-up">
@@ -546,9 +553,9 @@ function AdvisoryOutputPanel({ result, isLoading, photoPreview, distressMode }) 
                 }`}
               >
                 {isSpeaking ? (
-                  <><Volume2 className="w-3.5 h-3.5 animate-pulse" /> Speaking... / बोल रहा हूँ</>
+                  <><Volume2 className="w-3.5 h-3.5 animate-pulse" /> Playing... बोल रहा हूँ</>
                 ) : (
-                  <><Volume2 className="w-3.5 h-3.5" /> Listen</>
+                  <><Volume2 className="w-3.5 h-3.5" /> Listen / सुनें</>
                 )}
               </button>
 
@@ -773,6 +780,7 @@ export default function AdvisoryPage() {
   const [photoPreview, setPhotoPreview] = useState(null)
   const [lastPhotoPreview, setLastPhotoPreview] = useState(null)
   const [distressMode, setDistressMode] = useState(false)
+  const [selectedLang, setSelectedLang] = useState('hi-IN')
   const timersRef = useRef([])
 
   const simulateAgentProgression = useCallback((invokedAgentIds) => {
@@ -872,7 +880,7 @@ export default function AdvisoryPage() {
         const formData = new FormData()
         formData.append('farmer_id', 'demo_001')
         formData.append('text_input', textInputArgs)
-        formData.append('language', 'hindi')
+        formData.append('language', selectedLang)
         formData.append('photo', submittedPhoto)
         resp = await axios.post(`${API_BASE}/advisory/with-photo`, formData, {
           headers: { 'Content-Type': 'multipart/form-data' },
@@ -881,7 +889,8 @@ export default function AdvisoryPage() {
         resp = await axios.post(`${API_BASE}/advisory`, {
           farmer_id: 'demo_001',
           text_input: textInputArgs,
-          language: 'hindi',
+          language: selectedLang,
+          language_code: selectedLang,
           channel: 'web',
         })
       }
@@ -915,7 +924,7 @@ export default function AdvisoryPage() {
       setPhotoFile(null)
       setPhotoPreview(null)
     }
-  }, [simulateAgentProgression, photoFile, photoPreview])
+  }, [simulateAgentProgression, photoFile, photoPreview, selectedLang])
 
   return (
     <div className="flex-1 flex overflow-hidden bg-surface font-sans antialiased text-dark relative w-full" style={{ minHeight: 'calc(100vh - 64px)' }}>
@@ -938,6 +947,8 @@ export default function AdvisoryPage() {
             setPhotoFile={setPhotoFile}
             photoPreview={photoPreview}
             setPhotoPreview={setPhotoPreview}
+            selectedLang={selectedLang}
+            setSelectedLang={setSelectedLang}
           />
         </section>
         
@@ -951,6 +962,7 @@ export default function AdvisoryPage() {
               isLoading={isLoading}
               photoPreview={lastPhotoPreview}
               distressMode={distressMode}
+              selectedLang={selectedLang}
             />
           </div>
         </section>

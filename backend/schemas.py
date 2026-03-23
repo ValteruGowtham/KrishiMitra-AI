@@ -88,6 +88,8 @@ class FarmerQuery(BaseModel):
     intent: Optional[Intent] = None
     image_path: Optional[str] = None
     channel: Channel = Channel.WEB
+    language_code: str = "hi-IN"
+    language_label: str = "हिंदी (Hindi)"
     timestamp: datetime = Field(default_factory=datetime.utcnow)
 
 

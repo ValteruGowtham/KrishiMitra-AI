@@ -12,3 +12,6 @@ pillow
 requests
 python-multipart
 aiofiles
+langchain-google-genai
+google-generativeai
+httpx

@@ -16,8 +16,8 @@ import json
 from typing import Any, Annotated, Dict, List, Optional, Sequence
 
 from langchain_core.messages import HumanMessage, SystemMessage
-from langchain_openai import ChatOpenAI
 from langgraph.graph import StateGraph, END
+from backend.llm_factory import get_openai_llm
 
 from backend.agents.agents import (
     AGENT_REGISTRY,
@@ -37,7 +37,6 @@ from backend.schemas import (
     SoilType,
 )
 
-import os
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -245,13 +244,38 @@ async def synthesize(state: dict) -> dict:
             continue
         agent_summaries[aid] = msg.output_data
 
+    target_lang = s.query.language_code if hasattr(s.query, 'language_code') else "hi-IN"
+    target_lang_label = s.query.language_label if hasattr(s.query, 'language_label') else "हिंदी (Hindi)"
+
+    is_hindi = target_lang == "hi-IN"
+    is_english = target_lang == "en-IN"
+
+    if is_hindi:
+        lang_instruction = (
+            "Write the complete advisory in simple Hindi (Devanagari script). "
+            "End with an 'English Summary' section in English for reference."
+        )
+    elif is_english:
+        lang_instruction = (
+            "Write the complete advisory in clear English. "
+            "End with a 'हिंदी सारांश' (Hindi summary) section."
+        )
+    else:
+        lang_instruction = (
+            f"Write the COMPLETE advisory in {target_lang_label} script — "
+            f"every word must be in {target_lang_label}. "
+            "Do NOT fall back to Hindi or English for the main content. "
+            "Add a short English summary at the very end (2-3 sentences only) "
+            "for reference labelled 'English Summary'."
+        )
+
     system_prompt = (
         "You are KrishiMitra, a trusted farming advisor for Indian farmers. "
         "Combine the following agent analyses into ONE clear, actionable advisory. "
         "Write for a farmer with 8th-grade education. Use simple language. "
         "Structure: 1) Key advice, 2) Actions to take this week, "
         "3) Government schemes to apply for, 4) Market advice. "
-        "End with a Hindi section (सारांश हिंदी में)."
+        f"{lang_instruction}"
     )
 
     human_msg = (
@@ -262,7 +286,7 @@ async def synthesize(state: dict) -> dict:
     )
 
     try:
-        llm = ChatOpenAI(model="gpt-4o", temperature=0.2, api_key=os.getenv("OPENAI_API_KEY"))
+        llm = get_openai_llm(temperature=0.2)
         resp = await llm.ainvoke([
             SystemMessage(content=system_prompt),
             HumanMessage(content=human_msg),
