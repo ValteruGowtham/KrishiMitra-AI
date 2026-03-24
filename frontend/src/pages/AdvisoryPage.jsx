@@ -1,30 +1,30 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
 import {
-  Mic, MicOff, Send, Leaf, Sun, Bug, TrendingUp,
-  Landmark, Wallet, Shield, FileText, ChevronRight,
+  Mic, Send, Leaf, Sun, Bug, TrendingUp,
+  Landmark, Wallet, Shield, FileText,
   Activity, CheckCircle, AlertTriangle, Loader2,
-  User, MapPin, Wheat, Phone, Languages, HelpCircle, X,
-  Volume2, Camera
+  User, MapPin, Phone, X,
+  Volume2, Camera, Wheat, ChevronRight,
+  Sparkles, Zap, Globe, CloudSun, Sprout, MessageSquare
 } from 'lucide-react'
 import axios from 'axios'
 import ReactMarkdown from 'react-markdown'
-import AgentActivityFeed, { DEFAULT_AGENTS } from '../AgentActivityFeed'
-import '../App.css'
+import AgentActivityFeed from '../AgentActivityFeed'
 
 const API_BASE = 'http://localhost:8000/api/v1'
 
 const LANGUAGES = [
-  { code: 'hi-IN', label: 'हिंदी', full: 'हिंदी (Hindi)' },
-  { code: 'bn-IN', label: 'বাংলা', full: 'বাংলা (Bengali)' },
-  { code: 'te-IN', label: 'తెలుగు', full: 'తెలుగు (Telugu)' },
-  { code: 'mr-IN', label: 'मराठी', full: 'मराठी (Marathi)' },
-  { code: 'ta-IN', label: 'தமிழ்', full: 'தமிழ் (Tamil)' },
-  { code: 'gu-IN', label: 'ગુજ', full: 'ગુજરાતી (Gujarati)' },
-  { code: 'kn-IN', label: 'ಕನ್ನಡ', full: 'ಕನ್ನಡ (Kannada)' },
-  { code: 'od-IN', label: 'ଓଡ଼ିଆ', full: 'ଓଡ଼ିଆ (Odia)' },
-  { code: 'pa-IN', label: 'ਪੰਜਾਬੀ', full: 'ਪੰਜਾਬੀ (Punjabi)' },
-  { code: 'ml-IN', label: 'മലയാളം', full: 'മലയാളം (Malayalam)' },
-  { code: 'en-IN', label: 'English', full: 'English (India)' },
+  { code: 'hi-IN', label: 'हिंदी', full: 'Hindi' },
+  { code: 'bn-IN', label: 'বাংলা', full: 'Bengali' },
+  { code: 'te-IN', label: 'తెలుగు', full: 'Telugu' },
+  { code: 'mr-IN', label: 'मराठी', full: 'Marathi' },
+  { code: 'ta-IN', label: 'தமிழ்', full: 'Tamil' },
+  { code: 'gu-IN', label: 'ગુજ', full: 'Gujarati' },
+  { code: 'kn-IN', label: 'ಕನ್ನಡ', full: 'Kannada' },
+  { code: 'od-IN', label: 'ଓଡ଼ିଆ', full: 'Odia' },
+  { code: 'pa-IN', label: 'ਪੰਜਾਬੀ', full: 'Punjabi' },
+  { code: 'ml-IN', label: 'മലയാളം', full: 'Malayalam' },
+  { code: 'en-IN', label: 'English', full: 'English' },
 ]
 
 const DISTRESS_KEYWORDS = ['jeena nahi chahta', 'karz se tang', 'sab khatam', 'jaan de dunga',
@@ -36,18 +36,101 @@ const isDistressInput = (text) => {
 }
 
 const AGENT_REASONING = {
-  voice_agent:        { confidence: 0.92, reasoning: 'Classified intent via Hindi keyword matching' },
-  soil_agent:         { confidence: 0.85, reasoning: 'Analysed NPK levels and pH for wheat crop' },
-  crop_agent:         { confidence: 0.82, reasoning: 'Growth-stage assessment with weather context' },
-  pest_disease_agent: { confidence: 0.78, reasoning: 'Text-based symptom diagnosis for wheat' },
-  weather_agent:      { confidence: 0.70, reasoning: '5-day forecast translated to farming actions' },
-  mandi_agent:        { confidence: 0.75, reasoning: 'Compared 4 Rajasthan mandi prices vs MSP' },
-  scheme_agent:       { confidence: 0.95, reasoning: 'Matched 19 eligible schemes from DB' },
-  finance_agent:      { confidence: 0.80, reasoning: 'Break-even analysis with KCC advice' },
+  voice_agent:        { confidence: 0.92, reasoning: 'Intent classified via multilingual NLP' },
+  soil_agent:         { confidence: 0.85, reasoning: 'NPK and pH analysis completed' },
+  crop_agent:         { confidence: 0.82, reasoning: 'Growth-stage assessment done' },
+  pest_disease_agent: { confidence: 0.78, reasoning: 'Vision/text diagnosis completed' },
+  weather_agent:      { confidence: 0.70, reasoning: '5-day forecast analyzed' },
+  mandi_agent:        { confidence: 0.75, reasoning: 'Mandi prices vs MSP compared' },
+  scheme_agent:       { confidence: 0.95, reasoning: 'Scheme eligibility matched' },
+  finance_agent:      { confidence: 0.80, reasoning: 'Credit options analyzed' },
 }
 
+const DEFAULT_AGENTS = [
+  { id: 'soil_agent', name: 'Soil', status: 'idle', confidence: 0, reasoning_preview: '' },
+  { id: 'crop_agent', name: 'Crop', status: 'idle', confidence: 0, reasoning_preview: '' },
+  { id: 'pest_disease_agent', name: 'Pest', status: 'idle', confidence: 0, reasoning_preview: '' },
+  { id: 'weather_agent', name: 'Weather', status: 'idle', confidence: 0, reasoning_preview: '' },
+  { id: 'mandi_agent', name: 'Market', status: 'idle', confidence: 0, reasoning_preview: '' },
+  { id: 'scheme_agent', name: 'Schemes', status: 'idle', confidence: 0, reasoning_preview: '' },
+  { id: 'finance_agent', name: 'Finance', status: 'idle', confidence: 0, reasoning_preview: '' },
+  { id: 'voice_agent', name: 'Intent', status: 'idle', confidence: 0, reasoning_preview: '' },
+]
 
+// Farmer Profile Card Component
+function FarmerProfileCard() {
+  const demoFarmer = {
+    name: 'Ram Singh',
+    location: 'Ajmer, Rajasthan',
+    crop: 'Wheat',
+    land: '3.5 acres',
+    language: 'Hindi',
+  }
 
+  return (
+    <div className="bg-gradient-to-br from-primary-600 to-primary-700 rounded-2xl p-5 text-white shadow-xl">
+      <div className="flex items-center gap-3 mb-4">
+        <div className="w-12 h-12 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center">
+          <User className="w-6 h-6" />
+        </div>
+        <div>
+          <p className="font-bold text-lg">{demoFarmer.name}</p>
+          <p className="text-sm text-primary-100 flex items-center gap-1">
+            <MapPin className="w-3 h-3" /> {demoFarmer.location}
+          </p>
+        </div>
+      </div>
+      
+      <div className="grid grid-cols-3 gap-3">
+        <div className="bg-white/10 backdrop-blur-sm rounded-xl p-3 text-center">
+          <p className="text-2xl mb-1">🌾</p>
+          <p className="text-xs text-primary-100">Crop</p>
+          <p className="font-bold text-sm">{demoFarmer.crop}</p>
+        </div>
+        <div className="bg-white/10 backdrop-blur-sm rounded-xl p-3 text-center">
+          <p className="text-2xl mb-1">📏</p>
+          <p className="text-xs text-primary-100">Land</p>
+          <p className="font-bold text-sm">{demoFarmer.land}</p>
+        </div>
+        <div className="bg-white/10 backdrop-blur-sm rounded-xl p-3 text-center">
+          <p className="text-2xl mb-1">🗣️</p>
+          <p className="text-xs text-primary-100">Language</p>
+          <p className="font-bold text-sm">{demoFarmer.language}</p>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// Language Selector Component
+function LanguageSelector({ selectedLang, setSelectedLang }) {
+  return (
+    <div>
+      <div className="flex items-center gap-2 mb-3">
+        <Globe className="w-4 h-4 text-slate-500" />
+        <p className="text-sm font-semibold text-slate-700">Select Language</p>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {LANGUAGES.slice(0, 6).map((lang) => (
+          <button
+            key={lang.code}
+            type="button"
+            onClick={() => setSelectedLang(lang.code)}
+            className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all border-2 cursor-pointer ${
+              selectedLang === lang.code
+                ? 'bg-primary-600 border-primary-600 text-white shadow-lg shadow-primary-500/30'
+                : 'bg-white border-slate-200 text-slate-700 hover:border-primary-300'
+            }`}
+          >
+            {lang.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// Input Panel Component
 function FarmerInputPanel({ onSubmit, isLoading, photoFile, setPhotoFile, photoPreview, setPhotoPreview, selectedLang, setSelectedLang }) {
   const [textInput, setTextInput] = useState('')
   const [isRecording, setIsRecording] = useState(false)
@@ -57,14 +140,6 @@ function FarmerInputPanel({ onSubmit, isLoading, photoFile, setPhotoFile, photoP
   const audioChunksRef = useRef([])
   const fileInputRef = useRef(null)
 
-  const demoFarmer = {
-    name: 'Ram Singh',
-    location: 'Ajmer, Rajasthan',
-    crop: 'Wheat',
-    land: '3.5 acres',
-    language: 'Hindi',
-  }
-
   const toggleRecording = async () => {
     if (isRecording) {
       mediaRecorderRef.current?.stop()
@@ -73,14 +148,12 @@ function FarmerInputPanel({ onSubmit, isLoading, photoFile, setPhotoFile, photoP
     setRecordingError('')
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
-        ? 'audio/webm;codecs=opus'
-        : 'audio/webm'
+      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus' : 'audio/webm'
       const recorder = new MediaRecorder(stream, { mimeType })
       audioChunksRef.current = []
-      recorder.ondataavailable = (e) => {
-        if (e.data.size > 0) audioChunksRef.current.push(e.data)
-      }
+      
+      recorder.ondataavailable = (e) => { if (e.data.size > 0) audioChunksRef.current.push(e.data) }
+      
       recorder.onstop = async () => {
         stream.getTracks().forEach(t => t.stop())
         setIsRecording(false)
@@ -90,31 +163,30 @@ function FarmerInputPanel({ onSubmit, isLoading, photoFile, setPhotoFile, photoP
           const formData = new FormData()
           formData.append('audio', audioBlob, 'recording.webm')
           formData.append('language_code', selectedLang)
-          const res = await axios.post(`${API_BASE}/stt`, formData, {
-            headers: { 'Content-Type': 'multipart/form-data' },
-          })
+          const res = await axios.post(`${API_BASE}/stt`, formData, { headers: { 'Content-Type': 'multipart/form-data' } })
           const transcript = res.data.transcript
           if (transcript) {
             setTextInput(prev => (prev + ' ' + transcript).trim())
-            setTimeout(() => onSubmit(transcript, null), 800)
           } else {
-            setRecordingError('No speech detected. Please try again.')
+            setRecordingError('No speech detected')
           }
-        } catch (err) {
-          setRecordingError('Transcription failed. Check your API key.')
+        } catch {
+          setRecordingError('Transcription failed')
         } finally {
           setIsTranscribing(false)
         }
       }
+      
       recorder.onerror = () => {
         setIsRecording(false)
-        setRecordingError('Recording error. Please try again.')
+        setRecordingError('Recording error')
       }
+      
       mediaRecorderRef.current = recorder
       recorder.start()
       setIsRecording(true)
-    } catch (err) {
-      setRecordingError('Microphone access denied. Please allow microphone.')
+    } catch {
+      setRecordingError('Microphone access denied')
     }
   }
 
@@ -134,232 +206,146 @@ function FarmerInputPanel({ onSubmit, isLoading, photoFile, setPhotoFile, photoP
   }
 
   const handleSubmit = () => {
-    const effectiveText = textInput.trim() || (photoFile ? 'Mere fasal mein bimari lag gayi hai, photo dekh ke batao' : '')
+    const effectiveText = textInput.trim() || (photoFile ? 'Mere fasal mein bimari lag gayi hai' : '')
     if (!effectiveText || isLoading) return
     onSubmit(effectiveText, photoFile)
   }
 
-  const handleKeyDown = (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault()
-      handleSubmit()
-    }
-  }
-
   return (
-    <div className="flex flex-col h-full animate-fade-in-up">
-      {/* Farmer Profile Card */}
-      <div className="bg-white rounded-2xl shadow-sm border border-border mb-5 overflow-hidden flex flex-col relative group shrink-0">
-        <div className="bg-gradient-to-r from-primary to-primary-light p-4 flex items-center gap-4 relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-2xl -mr-10 -mt-10" />
-          <div className="w-14 h-14 rounded-full bg-white/20 border-2 border-white/30 backdrop-blur-sm flex items-center justify-center shrink-0 z-10 shadow-sm">
-            <User className="w-7 h-7 text-white" />
-          </div>
-          <div className="z-10 text-white">
-            <h3 className="font-bold text-lg leading-tight">{demoFarmer.name}</h3>
-            <p className="text-[11px] font-medium text-white/80 flex items-center gap-1 mt-0.5 opacity-90">
-              <MapPin className="w-3 h-3" /> {demoFarmer.location}
-            </p>
-          </div>
-        </div>
-        <div className="p-3 bg-white grid grid-cols-3 gap-2">
-          <ProfileStat icon="🌾" label="Crop" value={demoFarmer.crop} />
-          <ProfileStat icon="📏" label="Land" value={demoFarmer.land} />
-          <ProfileStat icon="🗣️" label="Language" value={demoFarmer.language} />
-        </div>
-      </div>
+    <div className="flex flex-col gap-5">
+      {/* Profile Card */}
+      <FarmerProfileCard />
 
-      {/* Voice + Camera Input Area */}
-      <div className="flex flex-col items-center justify-center mb-5 relative shrink-0 mt-2">
-        <div className="w-full mb-4">
-          <p className="text-[9px] uppercase font-bold text-muted tracking-widest mb-2">भाषा चुनें / Select Language</p>
-          <div className="flex flex-wrap gap-1.5 justify-center">
-            {LANGUAGES.map((lang) => (
-              <button
-                key={lang.code}
-                type="button"
-                onClick={() => setSelectedLang(lang.code)}
-                className={`px-2.5 py-1.5 rounded-lg text-[11px] font-bold transition-all border cursor-pointer ${
-                  selectedLang === lang.code
-                    ? 'bg-primary text-white border-primary shadow-md scale-105'
-                    : 'bg-white text-dark border-border hover:border-primary/50 hover:bg-primary/5'
-                }`}
-              >
-                {lang.label}
-              </button>
-            ))}
-          </div>
-        </div>
+      {/* Language Selector */}
+      <LanguageSelector selectedLang={selectedLang} setSelectedLang={setSelectedLang} />
 
-        {/* Mic + Camera buttons side by side */}
-        <div className="flex items-center gap-5">
-          {/* Mic Button */}
-          <div className="relative flex flex-col items-center">
+      {/* Voice & Photo Input */}
+      <div className="flex items-center gap-4">
+        {/* Mic Button */}
+        <div className="flex flex-col items-center gap-2">
+          <button
+            type="button"
+            onClick={toggleRecording}
+            className={`relative w-16 h-16 rounded-2xl flex items-center justify-center transition-all shadow-lg ${
+              isRecording
+                ? 'bg-danger text-white shadow-danger/30'
+                : 'bg-white text-primary-600 border-2 border-primary-200 hover:border-primary-400'
+            }`}
+          >
             {isRecording && (
-              <div className="absolute inset-0 bg-danger/20 rounded-full animate-ripple pointer-events-none" style={{width:'80px',height:'80px'}} />
+              <span className="absolute inset-0 rounded-2xl bg-danger/20 animate-pulse"></span>
             )}
-            <button type="button"
-              onClick={toggleRecording}
-              className={`relative z-10 w-20 h-20 rounded-full flex flex-col items-center justify-center gap-1 shadow-md transition-all duration-300 cursor-pointer ${
-                isRecording
-                  ? 'bg-danger text-white shadow-[0_0_0_8px_rgba(220,38,38,0.2)]'
-                  : 'bg-white text-primary border border-border hover:border-primary hover:shadow-lg hover:scale-105'
-              }`}
-            >
-              {isRecording ? <Mic className="w-8 h-8 animate-pulse" /> : <Mic className="w-8 h-8" />}
-            </button>
-            <p className="text-[9px] text-muted font-bold uppercase tracking-widest mt-2">
-              {isRecording ? 'Listening...' : 'Speak'}
-            </p>
-          </div>
-
-          {/* Camera Button */}
-          <div className="relative flex flex-col items-center">
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              capture="environment"
-              onChange={handlePhotoSelect}
-              className="hidden"
-              id="photo-input"
-            />
-            <button type="button"
-              onClick={() => fileInputRef.current?.click()}
-              className={`relative z-10 w-20 h-20 rounded-full flex flex-col items-center justify-center gap-1 shadow-md transition-all duration-300 cursor-pointer ${
-                photoFile
-                  ? 'bg-accent text-primary-dark border-2 border-accent shadow-[0_0_0_4px_rgba(244,162,97,0.3)]'
-                  : 'bg-white text-primary border border-border hover:border-accent hover:shadow-lg hover:scale-105'
-              }`}
-            >
-              <Camera className="w-7 h-7" />
-            </button>
-            <p className="text-[9px] text-muted font-bold uppercase tracking-widest mt-2">
-              {photoFile ? 'Photo Set' : 'Upload'}
-            </p>
-          </div>
+            <Mic className="w-7 h-7 relative z-10" />
+          </button>
+          <span className="text-xs font-medium text-slate-600">{isRecording ? 'Recording...' : 'Speak'}</span>
         </div>
 
-        {/* Photo Preview Thumbnail */}
-        {photoPreview && (
-          <div className="mt-3 flex items-center gap-3 bg-accent/10 border border-accent/30 rounded-xl px-3 py-2 shadow-sm">
-            <div className="relative">
-              <img src={photoPreview} alt="Crop preview" className="w-[60px] h-[60px] rounded-lg object-cover border border-border shadow-sm" />
-              <button type="button" onClick={removePhoto}
-                className="absolute -top-2 -right-2 w-5 h-5 bg-danger text-white rounded-full flex items-center justify-center shadow-md cursor-pointer hover:bg-red-700 transition-colors"
-              >
-                <X className="w-3 h-3" />
-              </button>
-            </div>
-            <div>
-              <p className="text-[10px] font-bold text-dark flex items-center gap-1">
-                📷 Photo attached
-              </p>
-              <p className="text-[9px] text-primary font-semibold">Disease detection active</p>
-            </div>
-          </div>
-        )}
-
-        {/* Live transcript / speech status */}
-        <div className="mt-3 text-center min-h-[32px] flex flex-col items-center justify-start w-full max-w-[280px]">
-          {recordingError ? (
-            <p className="text-[10px] text-danger font-bold bg-danger/10 px-3 py-1.5 rounded-lg border border-danger/20">
-              {recordingError}
-            </p>
-          ) : isTranscribing ? (
-            <p className="text-[10px] text-primary font-bold animate-pulse flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-primary animate-pulse"></span>
-              Transcribing... / लिख रहा हूँ...
-            </p>
-          ) : isRecording ? (
-            <p className="text-[10px] text-danger font-bold uppercase tracking-wider animate-pulse flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-danger"></span>
-              Recording... बोलते रहें
-            </p>
-          ) : null}
-        </div>
-      </div>
-
-      {/* Today's Farm Summary */}
-      <div className="mb-4 shrink-0">
-        <p className="text-[10px] uppercase font-bold text-muted tracking-wider mb-2">Today's Farm Summary</p>
-        <div className="flex flex-wrap gap-2">
-          <span className="bg-white border border-border px-3 py-1.5 rounded-lg text-xs font-semibold shadow-sm text-dark">🌡️ 32°C Ajmer</span>
-          <span className="bg-white border border-border px-3 py-1.5 rounded-lg text-xs font-semibold shadow-sm text-dark">🌾 Wheat Day 127</span>
-          <span className="bg-white border border-border px-3 py-1.5 rounded-lg text-xs font-semibold shadow-sm text-dark">💰 MSP ₹2,275/q</span>
-        </div>
-      </div>
-
-      {/* Text Input + Submit */}
-      <div className="flex-1 flex flex-col min-h-0 relative z-10 min-h-[120px]">
-        <div className="bg-white rounded-2xl shadow-sm border border-border flex-1 flex flex-col overflow-hidden focus-within:ring-2 focus-within:ring-primary/20 transition-all">
-          <textarea
-            value={textInput}
-            onChange={(e) => setTextInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder={photoFile ? "Describe the disease or just submit the photo..." : "Type your farming question here... / अपना सवाल यहाँ लिखें..."}
-            className="flex-1 p-4 text-sm resize-none focus:outline-none text-dark placeholder:text-muted/60"
-            rows={3}
+        {/* Camera Button */}
+        <div className="flex flex-col items-center gap-2">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            onChange={handlePhotoSelect}
+            className="hidden"
+            id="photo-input"
           />
-          <div className="px-4 py-3 border-t border-border flex items-center justify-between bg-surface/50">
-            <span className="text-[10px] uppercase font-bold text-muted/80 tracking-wider">
-              Hindi or English 
-            </span>
-            <button
-              type="button"
-              onClick={handleSubmit}
-              disabled={(!textInput.trim() && !photoFile) || isLoading}
-              className={`flex items-center gap-2 px-5 py-2 rounded-xl text-sm font-semibold transition-all duration-300 shadow-sm cursor-pointer ${
-                (textInput.trim() || photoFile) && !isLoading
-                  ? 'bg-primary text-white hover:bg-primary-dark hover:shadow-md hover:-translate-y-0.5'
-                  : 'bg-border/60 text-muted cursor-not-allowed shadow-none'
-              }`}
-            >
-              {isLoading ? (
-                <><Loader2 className="w-4 h-4 animate-spin" /> Processing</>
-              ) : (
-                <><Send className="w-4 h-4" /> Ask KrishiMitra</>
-              )}
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            className={`w-16 h-16 rounded-2xl flex items-center justify-center transition-all shadow-lg ${
+              photoFile
+                ? 'bg-accent-100 text-accent-600 border-2 border-accent-400'
+                : 'bg-white text-primary-600 border-2 border-primary-200 hover:border-primary-400'
+            }`}
+          >
+            <Camera className="w-7 h-7" />
+          </button>
+          <span className="text-xs font-medium text-slate-600">{photoFile ? 'Added' : 'Photo'}</span>
+        </div>
+
+        {/* Status Display */}
+        <div className="flex-1 min-h-16 flex items-center">
+          {photoPreview && (
+            <div className="flex items-center gap-3 bg-slate-50 rounded-xl p-2 pr-4">
+              <img src={photoPreview} alt="preview" className="w-14 h-14 rounded-xl object-cover shadow-sm" />
+              <div>
+                <p className="text-sm font-semibold text-slate-800">Photo ready</p>
+                <button onClick={removePhoto} className="text-xs text-danger hover:underline">Remove</button>
+              </div>
+            </div>
+          )}
+          {!photoPreview && recordingError && (
+            <div className="flex items-center gap-2 text-danger bg-danger/10 px-4 py-3 rounded-xl">
+              <AlertTriangle className="w-4 h-4" />
+              <span className="text-sm font-medium">{recordingError}</span>
+            </div>
+          )}
+          {!photoPreview && isTranscribing && (
+            <div className="flex items-center gap-2 text-primary-600 bg-primary-50 px-4 py-3 rounded-xl">
+              <Loader2 className="w-4 h-4 animate-spin" />
+              <span className="text-sm font-medium">Transcribing...</span>
+            </div>
+          )}
+          {!photoPreview && isRecording && (
+            <div className="flex items-center gap-2 text-danger bg-danger/10 px-4 py-3 rounded-xl">
+              <span className="w-2 h-2 rounded-full bg-danger animate-pulse"></span>
+              <span className="text-sm font-medium">Recording — speak now</span>
+            </div>
+          )}
         </div>
       </div>
 
       {/* Quick Questions */}
-      <div className="mt-5 shrink-0">
-        <p className="text-[10px] uppercase font-bold text-muted tracking-wider mb-2 flex items-center gap-1">
-          <HelpCircle className="w-3.5 h-3.5" /> Quick Questions
-        </p>
+      <div>
+        <p className="text-sm font-semibold text-slate-700 mb-3">Quick Questions</p>
         <div className="flex flex-wrap gap-2">
           {[
             'मेरे गेहूं के पत्ते पीले पड़ रहे हैं',
             'आज मंडी में गेहूं का भाव',
-            'कौन सी सरकारी योजना मिल सकती है',
+            'कौन सी योजना मिल सकती है',
             'मौसम की जानकारी दें',
-          ].map((prompt) => (
+          ].map((prompt, i) => (
             <button
+              key={i}
               type="button"
-              key={prompt}
-              onClick={() => {
-                setTextInput(prompt)
-                setTimeout(() => onSubmit(prompt, null), 100)
-              }}
-              className="text-xs font-medium border border-primary/30 text-primary-dark bg-primary/5 px-3 py-1.5 rounded-full hover:bg-primary hover:text-white hover:border-primary transition-all duration-300 shadow-sm cursor-pointer"
+              onClick={() => { setTextInput(prompt); setTimeout(() => onSubmit(prompt, null), 100) }}
+              className="px-4 py-2.5 rounded-xl text-sm font-medium bg-gradient-to-r from-primary-50 to-emerald-50 text-primary-700 border border-primary-200 hover:border-primary-400 hover:shadow-md transition-all cursor-pointer"
             >
               {prompt}
             </button>
           ))}
-          {/* Distress demo chip — red styled */}
+        </div>
+      </div>
+
+      {/* Text Input Area */}
+      <div className="flex-1 flex flex-col rounded-2xl border-2 border-slate-200 overflow-hidden bg-white shadow-sm focus-within:border-primary-400 focus-within:shadow-lg focus-within:shadow-primary-500/10 transition-all">
+        <textarea
+          value={textInput}
+          onChange={(e) => setTextInput(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSubmit() } }}
+          placeholder={photoFile ? 'Describe what you see...' : 'Type your question... / अपना सवाल लिखें...'}
+          className="flex-1 p-5 text-sm resize-none focus:outline-none min-h-32"
+          rows={4}
+        />
+        <div className="px-5 py-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
+          <span className="text-xs font-medium text-slate-500">Hindi or English supported</span>
           <button
             type="button"
-            onClick={() => {
-              const distressText = 'कर्ज से तंग आ गया हूँ'
-              setTextInput(distressText)
-              setTimeout(() => onSubmit(distressText, null), 100)
-            }}
-            className="text-xs font-medium border border-red-300 text-red-700 bg-red-50 px-3 py-1.5 rounded-full hover:bg-red-600 hover:text-white hover:border-red-600 transition-all duration-300 shadow-sm cursor-pointer"
+            onClick={handleSubmit}
+            disabled={(!textInput.trim() && !photoFile) || isLoading}
+            className={`flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-bold transition-all ${
+              (textInput.trim() || photoFile) && !isLoading
+                ? 'bg-gradient-to-r from-primary-600 to-primary-500 text-white shadow-lg shadow-primary-500/30 hover:shadow-xl hover:shadow-primary-500/40 hover:-translate-y-0.5'
+                : 'bg-slate-200 text-slate-400 cursor-not-allowed'
+            }`}
           >
-            कर्ज से तंग आ गया हूँ
+            {isLoading ? (
+              <><Loader2 className="w-4 h-4 animate-spin" /> Processing</>
+            ) : (
+              <><Send className="w-4 h-4" /> Ask KrishiMitra</>
+            )}
           </button>
         </div>
       </div>
@@ -367,71 +353,59 @@ function FarmerInputPanel({ onSubmit, isLoading, photoFile, setPhotoFile, photoP
   )
 }
 
-function ProfileStat({ icon, label, value }) {
-  return (
-    <div className="flex flex-col items-center justify-center p-2 rounded-xl bg-surface/60 border border-border/50">
-      <span className="text-base mb-0.5">{icon}</span>
-      <p className="text-[9px] uppercase font-bold text-muted tracking-wide mb-0.5">{label}</p>
-      <p className="text-xs font-semibold text-dark truncate w-full text-center">{value}</p>
-    </div>
-  )
-}
-
+// Distress Crisis Card
 function DistressCrisisCard() {
   return (
-    <div className="flex-1 flex flex-col bg-gradient-to-br from-amber-50 via-orange-50 to-amber-100 relative animate-fade-in-up overflow-y-auto">
+    <div className="flex-1 flex flex-col bg-gradient-to-br from-amber-50 via-orange-50 to-amber-100">
       <div className="flex-1 flex flex-col items-center justify-center p-8 text-center">
-        {/* Shield Icon */}
-        <div className="w-20 h-20 rounded-full bg-gradient-to-br from-amber-400 to-orange-400 flex items-center justify-center mb-6 shadow-lg">
-          <Shield className="w-10 h-10 text-white" />
+        <div className="w-24 h-24 rounded-full bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center mb-6 shadow-2xl shadow-amber-500/30 animate-float">
+          <Shield className="w-12 h-12 text-white" />
         </div>
-        
-        <h2 className="text-2xl font-bold text-amber-900 mb-2 leading-tight">
-          KrishiMitra aapke saath hai 🙏
-        </h2>
-        <p className="text-base text-amber-800 font-medium mb-8 max-w-md leading-relaxed">
-          Aapki baat sunne ke liye ek insaan available hai.
-          <br />Kripya neeche diye gaye number par call karein.
+
+        <h2 className="text-2xl font-bold text-amber-900 mb-3">KrishiMitra aapke saath hai 🙏</h2>
+        <p className="text-base text-amber-800 font-medium mb-8 max-w-md">
+          Aapki baat sunne ke liye ek insaan available hai. Neeche diye gaye number par call karein.
         </p>
 
-        {/* Helpline Cards */}
         <div className="w-full max-w-sm space-y-4 mb-8">
-          <a href="tel:18001801551" className="flex items-center gap-4 bg-white rounded-2xl p-5 shadow-md border-2 border-amber-300 hover:shadow-lg hover:scale-[1.02] transition-all group">
-            <div className="w-14 h-14 rounded-full bg-green-100 flex items-center justify-center shrink-0 group-hover:bg-green-200 transition-colors">
-              <Phone className="w-7 h-7 text-green-700" />
+          <a href="tel:18001801551" className="flex items-center gap-4 bg-white rounded-2xl p-5 shadow-lg border-2 border-amber-300 hover:shadow-xl hover:scale-105 transition-all group">
+            <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center group-hover:bg-green-200 transition-colors">
+              <Phone className="w-8 h-8 text-green-700" />
             </div>
             <div className="text-left">
               <p className="text-xs font-bold text-amber-600 uppercase tracking-wider">Kisan Helpline</p>
-              <p className="text-2xl font-extrabold text-green-700 tracking-tight">1800-180-1551</p>
-              <p className="text-[10px] font-semibold text-green-600 uppercase tracking-widest">FREE • 24/7 • All Languages</p>
+              <p className="text-2xl font-extrabold text-green-700">1800-180-1551</p>
+              <p className="text-xs font-semibold text-green-600">FREE • 24/7</p>
             </div>
           </a>
 
-          <a href="tel:18004251122" className="flex items-center gap-4 bg-white rounded-2xl p-5 shadow-md border-2 border-amber-200 hover:shadow-lg hover:scale-[1.02] transition-all group">
-            <div className="w-14 h-14 rounded-full bg-blue-100 flex items-center justify-center shrink-0 group-hover:bg-blue-200 transition-colors">
-              <Phone className="w-7 h-7 text-blue-700" />
+          <a href="tel:18004251122" className="flex items-center gap-4 bg-white rounded-2xl p-5 shadow-lg border-2 border-amber-200 hover:shadow-xl hover:scale-105 transition-all group">
+            <div className="w-16 h-16 rounded-full bg-blue-100 flex items-center justify-center group-hover:bg-blue-200 transition-colors">
+              <Phone className="w-8 h-8 text-blue-700" />
             </div>
             <div className="text-left">
               <p className="text-xs font-bold text-amber-600 uppercase tracking-wider">KVK Helpline</p>
-              <p className="text-2xl font-extrabold text-blue-700 tracking-tight">1800-425-1122</p>
-              <p className="text-[10px] font-semibold text-blue-600 uppercase tracking-widest">FREE • Krishi Vigyan Kendra</p>
+              <p className="text-2xl font-extrabold text-blue-700">1800-425-1122</p>
+              <p className="text-xs font-semibold text-blue-600">Krishi Vigyan Kendra</p>
             </div>
           </a>
         </div>
-        
-        <p className="text-xs text-amber-700/80 font-medium max-w-xs leading-relaxed">
+
+        <p className="text-xs text-amber-700/80 font-medium max-w-xs">
           Aap akele nahi hain. Hazaron kisan isse nikal chuke hain. Pehla kadam hai — baat karna.
         </p>
       </div>
 
-      {/* Distress Protocol Footer */}
-      <div className="shrink-0 p-3 bg-red-100 border-t border-red-200 flex items-center justify-center gap-2 text-[10px] text-red-700 font-bold uppercase tracking-widest">
-        <Shield className="w-3.5 h-3.5" /> Distress Protocol Activated — Compliance Override Active
+      <div className="flex-shrink-0 p-4 bg-red-100 border-t border-red-200">
+        <p className="text-xs text-red-700 font-bold uppercase tracking-wider text-center flex items-center justify-center gap-2">
+          <Shield className="w-4 h-4" /> Distress Protocol Activated
+        </p>
       </div>
     </div>
   )
 }
 
+// Advisory Output Panel
 function AdvisoryOutputPanel({ result, isLoading, photoPreview, distressMode, selectedLang }) {
   const [showHindi, setShowHindi] = useState(true)
   const [isSpeaking, setIsSpeaking] = useState(false)
@@ -446,49 +420,31 @@ function AdvisoryOutputPanel({ result, isLoading, photoPreview, distressMode, se
     }
   }, [])
 
-  if (!result && !isLoading) {
-    return <EmptyState />
-  }
-
-  // Distress mode takes over the entire panel
-  const isDistress = distressMode || result?.distress_alert === true
-  if (isDistress && result) {
-    return <DistressCrisisCard />
-  }
-
-  // Advisory now arrives in the farmer's chosen language.
-  // Split on 'English Summary' section if present; show full text by default.
   let mainText = result?.advisory_text || ''
   let englishSummary = ''
-
   const summaryMatch = mainText.match(/(?:English Summary|English\s*Summary\s*:)([\s\S]*)$/i)
   if (summaryMatch) {
     mainText = mainText.slice(0, summaryMatch.index).trim()
     englishSummary = summaryMatch[1].trim()
   }
-
   const displayMarkdown = showHindi ? mainText : (englishSummary || mainText)
 
-  const stopSpeaking = () => {
+  const stopSpeaking = useCallback(() => {
     if (audioRef.current) {
       audioRef.current.pause()
       audioRef.current = null
     }
     setIsSpeaking(false)
-  }
+  }, [])
 
-  const startSpeaking = async (textToRead) => {
+  const startSpeaking = useCallback(async (textToRead) => {
     if (!textToRead) return
     stopSpeaking()
     setIsSpeaking(true)
-    // Trim to first 3 sentences for preview
     const sentences = textToRead.replace(/[*_#`~>|-]/g, ' ').split(/(?<=[।.?!])\s+/)
     const preview = sentences.slice(0, 3).join(' ').trim().slice(0, 500)
     try {
-      const res = await axios.post(`${API_BASE}/tts`, {
-        text: preview,
-        language_code: selectedLang || 'hi-IN',
-      })
+      const res = await axios.post(`${API_BASE}/tts`, { text: preview, language_code: selectedLang || 'hi-IN' })
       const audioBase64 = res.data.audio_base64
       if (!audioBase64) { setIsSpeaking(false); return }
       const audioBytes = Uint8Array.from(atob(audioBase64), c => c.charCodeAt(0))
@@ -502,92 +458,122 @@ function AdvisoryOutputPanel({ result, isLoading, photoPreview, distressMode, se
     } catch {
       setIsSpeaking(false)
     }
-  }
+  }, [selectedLang, stopSpeaking])
 
-  // Auto-play first 3 sentences when result arrives
   useEffect(() => {
     if (result?.advisory_text && !result?.distress_alert) {
-      const t = setTimeout(() => {
-        const display = result.advisory_text
-        startSpeaking(display)
-      }, 600)
+      const t = setTimeout(() => startSpeaking(displayMarkdown), 600)
       return () => clearTimeout(t)
     }
-  }, [result])
+  }, [result, startSpeaking, displayMarkdown])
+
+  if (!result && !isLoading) {
+    return (
+      <div className="flex-1 flex items-center justify-center p-8">
+        <div className="text-center max-w-md">
+          <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-primary-100 to-primary-200 flex items-center justify-center mx-auto mb-6">
+            <Leaf className="w-10 h-10 text-primary-600" />
+          </div>
+          <h3 className="text-2xl font-bold text-slate-800 mb-3">Ask KrishiMitra</h3>
+          <p className="text-slate-600 font-medium mb-8">
+            Type, speak, or upload a crop photo. Eight AI agents will analyze soil, weather, pest, and market data together.
+          </p>
+          <div className="grid grid-cols-4 gap-3">
+            {[
+              { icon: Sprout, label: 'Soil' },
+              { icon: Wheat, label: 'Crop' },
+              { icon: Bug, label: 'Pest' },
+              { icon: TrendingUp, label: 'Market' },
+            ].map((item, i) => {
+              const Icon = item.icon
+              return (
+                <div key={i} className="flex flex-col items-center gap-2 p-4 rounded-2xl bg-slate-50 border border-slate-200">
+                  <Icon className="w-6 h-6 text-primary-500/70" />
+                  <span className="text-xs font-medium text-slate-600">{item.label}</span>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  const isDistress = distressMode || result?.distress_alert === true
+  if (isDistress && result) {
+    return <DistressCrisisCard />
+  }
 
   return (
-    <div className="flex flex-col h-full bg-white relative animate-fade-in-up">
+    <div className="flex flex-col h-full bg-white">
       {result ? (
-        <div className="flex-1 flex flex-col overflow-hidden relative border-l border-r border-border shadow-sm">
-          <div className="shrink-0 px-5 py-3 border-b border-border bg-gradient-to-r from-surface to-white flex items-center justify-between sticky top-0 z-10 shadow-sm">
-            
-            <div className="flex items-center gap-2">
-              <span className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${
+        <div className="flex-1 flex flex-col overflow-hidden">
+          {/* Header */}
+          <div className="flex-shrink-0 px-6 py-5 border-b border-slate-200 bg-white">
+            <div className="flex items-center justify-between flex-wrap gap-4">
+              <div className={`flex items-center gap-2.5 px-4 py-2.5 rounded-xl border-2 ${
                 result.distress_alert
-                  ? 'bg-red-100 text-red-700 border-red-300'
+                  ? 'bg-danger/10 border-danger/20 text-danger'
                   : result.compliance_flags?.length === 0
-                    ? 'bg-success/10 text-success border-success/20'
-                    : 'bg-warning/10 text-warning border-warning/20'
+                  ? 'bg-success/10 border-success/20 text-success'
+                  : 'bg-warning/10 border-warning/20 text-warning'
               }`}>
                 {result.distress_alert ? (
-                  <><Shield className="w-3.5 h-3.5" /> Distress Protocol Activated</>
+                  <><Shield className="w-5 h-5" /> <span className="font-bold text-sm">Crisis Protocol</span></>
                 ) : result.compliance_flags?.length === 0 ? (
-                  <><CheckCircle className="w-3.5 h-3.5" /> Compliance Passed</>
+                  <><CheckCircle className="w-5 h-5" /> <span className="font-bold text-sm">Compliance Passed</span></>
                 ) : (
-                  <><AlertTriangle className="w-3.5 h-3.5" /> Flags</>
+                  <><AlertTriangle className="w-5 h-5" /> <span className="font-bold text-sm">Review Flags</span></>
                 )}
-              </span>
-              
-              <span className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-primary/10 text-primary border border-primary/20 hover:bg-primary/20 transition-colors cursor-default">
-                <FileText className="w-3.5 h-3.5" /> Audit Logged
-              </span>
-            </div>
+              </div>
 
-            <div className="flex items-center gap-3">
-              <button type="button"
-                onClick={() => isSpeaking ? stopSpeaking() : startSpeaking(displayMarkdown)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-all border cursor-pointer shadow-sm ${
-                  isSpeaking 
-                    ? 'bg-primary border-primary text-white shadow-md' 
-                    : 'bg-white text-primary border-border hover:border-primary/50 hover:bg-primary/5'
-                }`}
-              >
-                {isSpeaking ? (
-                  <><Volume2 className="w-3.5 h-3.5 animate-pulse" /> Playing... बोल रहा हूँ</>
-                ) : (
-                  <><Volume2 className="w-3.5 h-3.5" /> Listen / सुनें</>
-                )}
-              </button>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => isSpeaking ? stopSpeaking() : startSpeaking(displayMarkdown)}
+                  className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold transition-all ${
+                    isSpeaking
+                      ? 'bg-primary-600 text-white shadow-lg shadow-primary-500/30'
+                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                  }`}
+                >
+                  <Volume2 className={`w-4 h-4 ${isSpeaking ? 'animate-pulse' : ''}`} />
+                  {isSpeaking ? 'Playing' : 'Listen'}
+                </button>
 
-              <div className="flex items-center bg-surface p-1 rounded-lg border border-border mt-0">
-                <button type="button"
-                  onClick={() => setShowHindi(false)}
-                  className={`px-3 py-1 rounded-md text-xs font-bold transition-all cursor-pointer ${
-                    !showHindi ? 'bg-white shadow-sm text-primary' : 'text-muted hover:text-dark'
-                  }`}
-                >English</button>
-                <button type="button"
-                  onClick={() => setShowHindi(true)}
-                  className={`px-3 py-1 rounded-md text-xs font-bold transition-all cursor-pointer ${
-                    showHindi ? 'bg-white shadow-sm text-primary' : 'text-muted hover:text-dark'
-                  }`}
-                >हिंदी</button>
+                <div className="flex rounded-xl overflow-hidden border-2 border-slate-200">
+                  <button
+                    onClick={() => setShowHindi(false)}
+                    className={`px-4 py-2.5 text-sm font-bold transition-all ${
+                      !showHindi ? 'bg-primary-600 text-white' : 'bg-white text-slate-600'
+                    }`}
+                  >
+                    EN
+                  </button>
+                  <button
+                    onClick={() => setShowHindi(true)}
+                    className={`px-4 py-2.5 text-sm font-bold transition-all ${
+                      showHindi ? 'bg-primary-600 text-white' : 'bg-white text-slate-600'
+                    }`}
+                  >
+                    हिंदी
+                  </button>
+                </div>
               </div>
             </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto" id="main-scroll">
-            {/* Analysed Image Section */}
+          {/* Content */}
+          <div className="flex-1 overflow-y-auto">
             {photoPreview && (
-              <div className="p-6 md:p-8 pb-4 bg-gradient-to-r from-red-50 to-orange-50 border-b border-border">
-                <p className="text-[10px] uppercase font-bold text-danger tracking-widest mb-3 flex items-center gap-1.5">
-                  <Camera className="w-3.5 h-3.5" /> Analysed Image — Disease Scan Complete
+              <div className="px-6 py-5 border-b border-slate-200 bg-gradient-to-r from-danger-50 to-orange-50">
+                <p className="text-xs font-bold mb-3 text-danger flex items-center gap-2">
+                  <Camera className="w-4 h-4" /> AI Image Analysis Complete
                 </p>
                 <div className="flex items-start gap-4">
-                  <img src={photoPreview} alt="Analysed crop" className="w-[100px] h-[100px] rounded-xl object-cover border-2 border-danger/30 shadow-md" />
+                  <img src={photoPreview} alt="Analysed crop" className="w-24 h-24 rounded-2xl object-cover shadow-lg border-2 border-white" />
                   <div className="flex-1">
-                    <p className="text-xs font-bold text-dark mb-1">Vision AI Diagnosis</p>
-                    <p className="text-[11px] text-muted leading-relaxed">
+                    <p className="text-sm font-bold text-slate-800 mb-1">Vision AI Diagnosis</p>
+                    <p className="text-xs text-slate-600 leading-relaxed">
                       Image processed by Pest & Disease Agent using GPT-4o Vision. Results integrated into the advisory below.
                     </p>
                   </div>
@@ -595,44 +581,52 @@ function AdvisoryOutputPanel({ result, isLoading, photoPreview, distressMode, se
               </div>
             )}
 
-            <div className="p-6 md:p-8 bg-white">
-              <div className="prose prose-sm md:prose-base max-w-none font-sans">
-                <ReactMarkdown
-                  components={{
-                    h3: ({node, ...props}) => <><hr className="my-6 border-border" /><h3 className="uppercase text-primary-dark tracking-wide font-bold mt-6 mb-3" {...props} /></>,
-                    h2: ({node, ...props}) => <><hr className="my-6 border-border" /><h2 className="uppercase text-primary-dark tracking-wide font-bold mt-6 mb-3" {...props} /></>,
-                    p: ({node, ...props}) => <p className="mb-4 text-dark/90 leading-relaxed font-medium" {...props} />,
-                    strong: ({node, ...props}) => <strong className="text-dark font-bold" {...props} />,
-                    ul: ({node, ...props}) => <ul className="pl-5 space-y-2 mb-4 list-disc text-dark/90" {...props} />
-                  }}
-                >
-                  {displayMarkdown}
-                </ReactMarkdown>
-              </div>
+            <div className="px-6 py-6 prose prose-sm max-w-none">
+              <ReactMarkdown
+                components={{
+                  h3: ({...props}) => <h3 className="text-lg font-bold text-primary-700 mt-8 mb-3 uppercase tracking-wide" {...props} />,
+                  h2: ({...props}) => <h2 className="text-xl font-bold text-primary-700 mt-8 mb-3 uppercase tracking-wide" {...props} />,
+                  p: ({...props}) => <p className="mb-4 text-slate-700 leading-relaxed font-medium" {...props} />,
+                  strong: ({...props}) => <strong className="text-slate-900 font-bold" {...props} />,
+                  ul: ({...props}) => <ul className="pl-5 space-y-2 mb-4 list-disc text-slate-700" {...props} />
+                }}
+              >
+                {displayMarkdown}
+              </ReactMarkdown>
             </div>
 
-            <div className="p-6 md:p-8 bg-surface border-t border-border mt-auto">
-              <h3 className="text-sm font-bold text-dark mb-4 flex items-center gap-2">
-                <Landmark className="w-4 h-4 text-primary" /> Eligible Government Schemes
+            {/* Schemes Section */}
+            <div className="px-6 py-6 border-t border-slate-200 bg-gradient-to-r from-primary-50 to-emerald-50">
+              <h3 className="text-sm font-bold mb-4 flex items-center gap-2 text-slate-800">
+                <Landmark className="w-5 h-5 text-primary-600" /> Eligible Government Schemes
               </h3>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <SchemeCard name="PM-KISAN" amount="Rs. 6,000/year" category="Income" />
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <SchemeCard name="PM-KISAN" amount="₹6,000/year" category="Income Support" />
                 <SchemeCard name="PM Fasal Bima" amount="2% Premium" category="Insurance" />
-                <SchemeCard name="Kisan Credit Card" amount="Rs. 3,00,000 @ 4%" category="Credit" />
+                <SchemeCard name="KCC" amount="₹3L @ 4%" category="Credit" />
               </div>
             </div>
           </div>
-          
-          <div className="shrink-0 p-3 bg-surface border-t border-border flex items-center justify-center gap-2 text-[10px] text-muted font-bold uppercase tracking-widest">
-            <Activity className="w-3.5 h-3.5 text-accent" /> Powered by 8 AI Agents
+
+          {/* Footer */}
+          <div className="flex-shrink-0 px-6 py-4 border-t border-slate-200 bg-slate-50">
+            <p className="text-xs font-medium text-slate-600 text-center flex items-center justify-center gap-2">
+              <Activity className="w-4 h-4 text-accent-500" />
+              Powered by 8 AI Agents • Multi-agent Orchestration Engine
+            </p>
           </div>
         </div>
       ) : (
-        <div className="flex-1 flex items-center justify-center bg-white border border-border shadow-sm">
+        <div className="flex-1 flex items-center justify-center bg-slate-50">
           <div className="text-center">
-            <Loader2 className="w-8 h-8 text-primary animate-spin mx-auto mb-3" />
-            <p className="text-sm font-bold text-dark">Synthesizing advisory…</p>
-            <p className="text-xs text-muted font-medium mt-1">Refining multi-agent analysis securely</p>
+            <div className="relative w-20 h-20 mx-auto mb-6">
+              <div className="absolute inset-0 rounded-full bg-primary-200 animate-ping"></div>
+              <div className="relative w-20 h-20 rounded-full bg-gradient-to-br from-primary-500 to-primary-600 flex items-center justify-center shadow-2xl shadow-primary-500/30">
+                <Loader2 className="w-10 h-10 text-white animate-spin" />
+              </div>
+            </div>
+            <p className="text-lg font-bold text-slate-800 mb-2">Synthesizing advisory…</p>
+            <p className="text-sm text-slate-600 font-medium">Running multi-agent analysis securely</p>
           </div>
         </div>
       )}
@@ -642,127 +636,80 @@ function AdvisoryOutputPanel({ result, isLoading, photoPreview, distressMode, se
 
 function SchemeCard({ name, amount, category }) {
   return (
-    <div className="bg-white p-4 rounded-xl border border-border shadow-sm hover:shadow-md transition-all cursor-pointer group">
-      <div className="flex justify-between items-start mb-2">
-        <span className="text-[10px] font-bold uppercase tracking-wider text-primary bg-primary/10 px-2 py-0.5 rounded-md">
-          {category}
-        </span>
-      </div>
-      <h4 className="font-bold text-dark text-sm mb-1">{name}</h4>
-      <p className="text-xl font-extrabold text-success mb-3 tracking-tight">{amount}</p>
-      <button type="button" className="text-xs font-bold text-info hover:text-info-dark flex items-center gap-1 group-hover:text-primary transition-colors cursor-pointer bg-transparent border-none">
-        Apply Now <ChevronRight className="w-3 h-3 group-hover:translate-x-1 transition-transform" />
+    <div className="bg-white rounded-2xl p-5 shadow-lg border border-slate-200 hover:shadow-xl transition-all hover:-translate-y-1">
+      <span className="text-xs font-bold px-3 py-1.5 rounded-lg bg-primary-100 text-primary-700 uppercase tracking-wider">
+        {category}
+      </span>
+      <p className="text-sm font-bold text-slate-800 mt-3 mb-1">{name}</p>
+      <p className="text-lg font-bold text-success">{amount}</p>
+      <button className="text-xs mt-3 flex items-center gap-1 text-primary-600 font-bold hover:underline">
+        Apply Now <ChevronRight className="w-3 h-3" />
       </button>
     </div>
   )
 }
 
-function EmptyState() {
-  return (
-    <div className="flex-1 flex items-center justify-center bg-white border-l border-r border-border shadow-sm">
-      <div className="text-center max-w-md p-8">
-        <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-primary/10 to-accent/10 flex items-center justify-center mx-auto mb-6 transform rotate-3 shadow-inner">
-          <Leaf className="w-10 h-10 text-primary opacity-80" />
-        </div>
-        <h3 className="text-xl font-bold text-dark mb-3">Ask KrishiMitra</h3>
-        <p className="text-sm text-muted leading-relaxed font-medium">
-          Type, speak, or upload a crop photo. Our 8 AI agents will analyze across soil, weather, pest, and market dimensions.
-        </p>
-        <div className="mt-8 grid grid-cols-4 gap-4">
-          {[
-            { icon: <Leaf className="w-5 h-5" />, label: 'Soil' },
-            { icon: <Wheat className="w-5 h-5" />, label: 'Crop' },
-            { icon: <Bug className="w-5 h-5" />, label: 'Pest' },
-            { icon: <TrendingUp className="w-5 h-5" />, label: 'Market' },
-          ].map((item) => (
-            <div key={item.label} className="flex flex-col items-center gap-2 bg-surface rounded-xl p-3 border border-border/50 hover:bg-surface-alt hover:-translate-y-1 transition-all">
-              <div className="text-primary/60">{item.icon}</div>
-              <span className="text-[10px] uppercase font-bold text-muted tracking-wider">{item.label}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  )
-}
-
+// Audit Trail Drawer
 function AuditTrailDrawer({ isOpen, onClose, agentStatuses, result }) {
   useEffect(() => {
-    const handleKeyDown = (e) => {
-      if (isOpen && e.key === 'Escape') onClose()
-    }
+    const handleKeyDown = (e) => { if (isOpen && e.key === 'Escape') onClose() }
     if (isOpen) window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [isOpen, onClose])
 
-  if (!isOpen) return null;
+  if (!isOpen) return null
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
-      <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px]" onClick={onClose} />
-      
-      <div className={`relative w-[400px] h-full bg-[#1a1a2e] text-white shadow-2xl flex flex-col border-l border-white/10 transform transition-transform duration-300 ${isOpen ? 'translate-x-0' : 'translate-x-full'} overflow-hidden`}>
-        
-        <div className="p-5 border-b border-white/10 flex items-center justify-between shrink-0 bg-[#161628]">
-          <div>
-            <h2 className="text-lg font-bold flex items-center gap-2">
-              <FileText className="w-5 h-5 text-accent-light" /> Audit Trail
-            </h2>
-            <div className="flex items-center gap-2 mt-1">
-              <p className="text-[11px] text-white/50 font-mono">
+      <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative w-96 h-full bg-slate-900 text-white shadow-2xl flex flex-col overflow-hidden animate-slide-in-right">
+        <div className="p-6 border-b border-white/10 bg-slate-800/50">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-xl font-bold flex items-center gap-2">
+                <FileText className="w-6 h-6 text-accent-400" /> Audit Trail
+              </h2>
+              <p className="text-xs text-slate-400 font-mono mt-1">
                 ID: {result?.audit_id || 'PENDING'} • {new Date().toLocaleTimeString()}
               </p>
             </div>
-            <p className="text-[9px] text-white/30 uppercase tracking-widest mt-1">
-              Press <kbd className="bg-white/10 px-1 py-0.5 rounded font-mono">ESC</kbd> to close
-            </p>
+            <button onClick={onClose} className="p-2 hover:bg-white/10 rounded-xl transition-colors">
+              <X className="w-6 h-6" />
+            </button>
           </div>
-          <button type="button" onClick={onClose} className="p-2 hover:bg-white/10 rounded-full transition-colors cursor-pointer text-white/60 hover:text-white">
-            <X className="w-5 h-5" />
-          </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-5 space-y-8 pb-10">
+        <div className="flex-1 overflow-y-auto p-6 space-y-6">
           <div>
-            <h3 className="text-[10px] font-bold text-white/40 uppercase tracking-widest mb-3 border-b border-white/5 pb-2">Agent Execution Log</h3>
-            {agentStatuses.filter(a => a.status === 'done').length === 0 && (
-              <p className="text-xs text-white/30 italic">No agent data available.</p>
+            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 pb-2 border-b border-white/5">Agent Execution Log</h3>
+            {agentStatuses.filter(a => a.status === 'done').length === 0 ? (
+              <p className="text-sm text-slate-500 italic">No agent data available.</p>
+            ) : (
+              agentStatuses.filter(a => a.status === 'done').map(a => (
+                <div key={a.id} className="mb-4 bg-white/5 rounded-xl p-4 border border-white/5">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-bold text-accent-400 flex items-center gap-2">
+                      <CheckCircle className="w-4 h-4 text-emerald-400" /> {a.name}
+                    </span>
+                    <span className="text-xs font-mono font-bold bg-white/10 px-2 py-1 rounded text-emerald-300">
+                      {Math.round(a.confidence * 100)}%
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-400">{a.reasoning_preview || 'Analysis complete.'}</p>
+                </div>
+              ))
             )}
-            {agentStatuses.filter(a => a.status === 'done').map(a => (
-              <div key={a.id} className="mb-4 bg-white/5 rounded-xl p-4 border border-white/5 hover:border-white/10 transition-colors">
-                <div className="flex items-center justify-between mb-2.5">
-                  <span className="text-sm font-bold text-accent-light flex items-center gap-2">
-                    <CheckCircle className="w-3.5 h-3.5 text-emerald-400" /> {a.name}
-                  </span>
-                  <span className="text-xs font-mono font-bold bg-white/10 px-2 py-0.5 rounded text-emerald-300">
-                    {(a.confidence * 100).toFixed(0)}%
-                  </span>
-                </div>
-                <div className="space-y-2">
-                  <p className="text-[10px] text-white/50 font-mono bg-black/30 p-1.5 rounded uppercase tracking-wider">
-                    Sources: Inter-DB, LLM-K, API
-                  </p>
-                  <ol className="list-decimal list-outside ml-4 text-[11px] text-white/70 space-y-1.5 font-medium leading-relaxed">
-                    <li>{a.reasoning_preview || 'Completed specialized analysis task.'}</li>
-                    <li>Cross-validated internal dataset for confidence scoring.</li>
-                  </ol>
-                </div>
-              </div>
-            ))}
           </div>
 
           <div>
-            <h3 className="text-[10px] font-bold text-white/40 uppercase tracking-widest mb-3 border-b border-white/5 pb-2">Compliance Gateways</h3>
+            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 pb-2 border-b border-white/5">Compliance Gateways</h3>
             <div className="space-y-2">
-              <div className="flex items-center justify-between text-xs bg-emerald-500/10 text-emerald-400 p-2.5 rounded-lg border border-emerald-500/20 font-mono">
-                <span>Distress Detection</span><span className="font-bold">PASS</span>
-              </div>
-              <div className="flex items-center justify-between text-xs bg-emerald-500/10 text-emerald-400 p-2.5 rounded-lg border border-emerald-500/20 font-mono">
-                <span>Fertilizer Limits (Urea)</span><span className="font-bold">PASS</span>
-              </div>
-              <div className="flex items-center justify-between text-xs bg-emerald-500/10 text-emerald-400 p-2.5 rounded-lg border border-emerald-500/20 font-mono">
-                <span>Pesticide Ban Check</span><span className="font-bold">PASS</span>
-              </div>
+              {['Distress Detection', 'Fertilizer Limits', 'Pesticide Check'].map((item, i) => (
+                <div key={i} className="flex items-center justify-between text-xs bg-emerald-500/10 text-emerald-400 p-3 rounded-xl border border-emerald-500/20 font-mono">
+                  <span>{item}</span>
+                  <span className="font-bold">PASS</span>
+                </div>
+              ))}
             </div>
           </div>
         </div>
@@ -771,6 +718,7 @@ function AuditTrailDrawer({ isOpen, onClose, agentStatuses, result }) {
   )
 }
 
+// Main AdvisoryPage Component
 export default function AdvisoryPage() {
   const [result, setResult] = useState(null)
   const [isLoading, setIsLoading] = useState(false)
@@ -786,57 +734,26 @@ export default function AdvisoryPage() {
   const simulateAgentProgression = useCallback((invokedAgentIds) => {
     timersRef.current.forEach(clearTimeout)
     timersRef.current = []
+    setAgentStatuses(DEFAULT_AGENTS.map(a => ({ ...a, status: 'idle' })))
 
-    const orderedIds = [
-      'voice_agent',
-      ...invokedAgentIds.filter(id => id !== 'voice_agent'),
-    ]
-
-    setAgentStatuses(
-      DEFAULT_AGENTS.map(a => ({
-        ...a,
-        status: 'idle',
-      }))
-    )
-
-    orderedIds.forEach((agentId, idx) => {
+    invokedAgentIds.forEach((agentId, idx) => {
       const runTimer = setTimeout(() => {
-        setAgentStatuses(prev =>
-          prev.map(a =>
-            a.id === agentId ? { ...a, status: 'running' } : a
-          )
-        )
-      }, idx * 600) 
+        setAgentStatuses(prev => prev.map(a => a.id === agentId ? { ...a, status: 'running' } : a))
+      }, idx * 500)
 
       const doneTimer = setTimeout(() => {
         const meta = AGENT_REASONING[agentId] || { confidence: 0.8, reasoning: 'Analysis complete' }
-        let reasoning = meta.reasoning
-        if (agentId === 'pest_disease_agent' && photoFile) {
-          reasoning = 'GPT-4o Vision analysis on uploaded crop image'
-        }
-        setAgentStatuses(prev =>
-          prev.map(a =>
-            a.id === agentId
-              ? {
-                  ...a,
-                  status: 'done',
-                  confidence: meta.confidence,
-                  reasoning_preview: reasoning,
-                }
-              : a
-          )
-        )
-      }, idx * 600 + 800 + Math.random() * 400) 
+        setAgentStatuses(prev => prev.map(a => a.id === agentId ? { ...a, status: 'done', confidence: meta.confidence, reasoning_preview: meta.reasoning } : a))
+      }, idx * 500 + 700 + Math.random() * 400)
 
       timersRef.current.push(runTimer, doneTimer)
     })
-  }, [photoFile])
+  }, [])
 
   const handleSubmit = useCallback(async (textInputArgs, photo) => {
     setIsLoading(true)
     setResult(null)
 
-    // Track whether photo was attached for this submission
     const submittedPhoto = photo || photoFile
     if (submittedPhoto) {
       setLastPhotoPreview(photoPreview)
@@ -844,39 +761,34 @@ export default function AdvisoryPage() {
       setLastPhotoPreview(null)
     }
 
-    const text = textInputArgs.toLowerCase()
-    
-    // Check for distress keywords
     const detectedDistress = isDistressInput(textInputArgs)
     setDistressMode(detectedDistress)
-    
+
     let likelyAgents = ['voice_agent']
+    const text = textInputArgs.toLowerCase()
 
     if (submittedPhoto) {
       likelyAgents.push('pest_disease_agent', 'crop_agent', 'weather_agent')
-    } else if (text.includes('मिट्टी') || text.includes('soil') || text.includes('खाद') || text.includes('urea')) {
+    } else if (text.includes('mitti') || text.includes('soil') || text.includes('खाद')) {
       likelyAgents.push('soil_agent', 'crop_agent', 'weather_agent')
-    } else if (text.includes('कीट') || text.includes('pest') || text.includes('बीमारी') || text.includes('पीले')) {
+    } else if (text.includes('keeda') || text.includes('pest') || text.includes('bimari')) {
       likelyAgents.push('crop_agent', 'soil_agent', 'weather_agent')
-    } else if (text.includes('मंडी') || text.includes('भाव') || text.includes('price') || text.includes('market')) {
+    } else if (text.includes('mandi') || text.includes('bhav') || text.includes('price')) {
       likelyAgents.push('mandi_agent', 'finance_agent')
-    } else if (text.includes('योजना') || text.includes('scheme') || text.includes('सरकारी')) {
+    } else if (text.includes('yojana') || text.includes('scheme')) {
       likelyAgents.push('scheme_agent', 'finance_agent')
-    } else if (text.includes('मौसम') || text.includes('weather') || text.includes('बारिश')) {
+    } else if (text.includes('mausam') || text.includes('weather')) {
       likelyAgents.push('weather_agent', 'crop_agent')
     } else {
       likelyAgents.push('crop_agent', 'weather_agent')
     }
 
     if (!likelyAgents.includes('scheme_agent')) likelyAgents.push('scheme_agent')
-
     simulateAgentProgression(likelyAgents)
 
     try {
       let resp
-
       if (submittedPhoto) {
-        // Multipart form data for photo upload
         const formData = new FormData()
         formData.append('farmer_id', 'demo_001')
         formData.append('text_input', textInputArgs)
@@ -896,48 +808,43 @@ export default function AdvisoryPage() {
       }
 
       const realAgents = resp.data.agents_invoked || []
-      setAgentStatuses(prev =>
-        prev.map(a => {
-          if (realAgents.includes(a.id)) {
-            const meta = AGENT_REASONING[a.id] || { confidence: 0.8, reasoning: 'Complete' }
-            return { ...a, status: 'done', confidence: meta.confidence, reasoning_preview: meta.reasoning }
-          }
-          return { ...a, status: 'idle' }
-        })
-      )
+      setAgentStatuses(prev => prev.map(a => {
+        if (realAgents.includes(a.id)) {
+          const meta = AGENT_REASONING[a.id] || { confidence: 0.8, reasoning: 'Complete' }
+          return { ...a, status: 'done', confidence: meta.confidence, reasoning_preview: meta.reasoning }
+        }
+        return { ...a, status: 'idle' }
+      }))
 
       setResult(resp.data)
     } catch (err) {
-      setAgentStatuses(prev =>
-        prev.map(a => a.status !== 'idle' ? { ...a, status: 'failed' } : a)
-      )
+      setAgentStatuses(prev => prev.map(a => a.status !== 'idle' ? { ...a, status: 'failed' } : a))
       setResult({
-        advisory_text: `**Error Analysis:**\n\nFailed to sync with central orchestrator block. Ensure backend is active.\n\n*Code:* ${err.response?.data?.detail || err.message}`,
+        advisory_text: `**Error:** Failed to connect to backend.\n\n*Code:* ${err.response?.data?.detail || err.message}`,
         agents_invoked: [],
-        compliance_flags: ['CRITICAL_SERVER_ERROR'],
+        compliance_flags: ['CONNECTION_ERROR'],
         distress_alert: false,
         audit_id: null,
       })
     } finally {
       setIsLoading(false)
-      // Clear photo after submission
       setPhotoFile(null)
       setPhotoPreview(null)
     }
   }, [simulateAgentProgression, photoFile, photoPreview, selectedLang])
 
   return (
-    <div className="flex-1 flex overflow-hidden bg-surface font-sans antialiased text-dark relative w-full" style={{ minHeight: 'calc(100vh - 64px)' }}>
-      <div className="flex-1 flex overflow-hidden relative w-full max-w-[1600px] mx-auto">
-        <section className="w-[40%] xl:w-[35%] border-l border-r border-border/70 p-6 overflow-y-auto bg-surface relative z-0 flex flex-col">
-          <div className="flex justify-between items-center mb-4 shrink-0">
-            <h2 className="text-[10px] font-bold text-muted uppercase tracking-wider">Session Info</h2>
-            <button 
+    <div className="flex-1 flex overflow-hidden bg-slate-100">
+      <div className="flex-1 flex max-w-[1600px] mx-auto w-full gap-0">
+        {/* Left Sidebar - Input Panel */}
+        <aside className="w-96 flex-shrink-0 flex flex-col overflow-y-auto p-6 bg-white border-r border-slate-200">
+          <div className="flex items-center justify-between mb-6">
+            <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Farmer Session</p>
+            <button
               onClick={() => setIsAuditOpen(true)}
-              className="flex items-center gap-1.5 bg-white px-3 py-1.5 rounded-full text-[10px] font-bold tracking-wide border border-border shadow-sm hover:border-primary transition-colors cursor-pointer text-primary"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors cursor-pointer"
             >
-              <FileText className="w-3 h-3" />
-              Audit Trail
+              <FileText className="w-3.5 h-3.5" /> Audit Trail
             </button>
           </div>
           <FarmerInputPanel
@@ -950,13 +857,17 @@ export default function AdvisoryPage() {
             selectedLang={selectedLang}
             setSelectedLang={setSelectedLang}
           />
-        </section>
-        
-        <section className="w-[60%] xl:w-[65%] flex flex-col relative z-0 bg-surface/30 border-r border-border/70">
-          <div className="shrink-0 p-4 xl:p-6 pb-2 xl:pb-4 border-b border-border shadow-sm bg-surface z-10 w-full relative">
+        </aside>
+
+        {/* Right Content - Agent Feed + Output */}
+        <div className="flex-1 flex flex-col overflow-hidden">
+          {/* Agent Activity Feed */}
+          <div className="flex-shrink-0 px-6 py-5 border-b border-slate-200 bg-white">
             <AgentActivityFeed agents={agentStatuses} photoAttached={!!photoFile || !!lastPhotoPreview} distressMode={distressMode} />
           </div>
-          <div className="flex-1 overflow-hidden relative w-full pt-4 xl:pt-4 px-4 xl:px-6 pb-4 xl:pb-6">
+          
+          {/* Advisory Output */}
+          <div className="flex-1 overflow-hidden">
             <AdvisoryOutputPanel
               result={result}
               isLoading={isLoading}
@@ -965,14 +876,14 @@ export default function AdvisoryPage() {
               selectedLang={selectedLang}
             />
           </div>
-        </section>
+        </div>
       </div>
 
-      <AuditTrailDrawer 
-        isOpen={isAuditOpen} 
-        onClose={() => setIsAuditOpen(false)} 
-        agentStatuses={agentStatuses} 
-        result={result} 
+      <AuditTrailDrawer
+        isOpen={isAuditOpen}
+        onClose={() => setIsAuditOpen(false)}
+        agentStatuses={agentStatuses}
+        result={result}
       />
     </div>
   )
