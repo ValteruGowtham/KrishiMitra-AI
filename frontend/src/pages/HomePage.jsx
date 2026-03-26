@@ -1,5 +1,5 @@
 import React from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 
 const MARKET = [
   { crop: 'Wheat (Sharbati)', state: 'Rajasthan', mandi: 'Ajmer', price: 2380, msp: 2275, chg: 4.6 },
@@ -8,7 +8,8 @@ const MARKET = [
   { crop: 'Soybean', state: 'M.P.', mandi: 'Indore', price: 4800, msp: 4600, chg: 3.5 },
 ];
 
-const HomePage = ({ setPage }) => {
+const HomePage = () => {
+  const navigate = useNavigate();
   const agents = [
     { emoji: '🌱', name: 'Soil Intelligence', desc: 'NPK, pH & fertilizer' },
     { emoji: '🌾', name: 'Crop Advisory', desc: 'Growth stage guidance' },
@@ -38,9 +39,9 @@ const HomePage = ({ setPage }) => {
               Eight specialized AI agents working together to give you expert advice on soil, weather, pests, markets, and more — in your language, instantly.
             </p>
             <div className="hero-btns">
-              <button className="btn-primary" onClick={() => setPage('advisory')}>
+              <Link to="/advisory" className="btn-primary">
                 Get Free Advisory ✨
-              </button>
+              </Link>
               <a href="tel:18001801551" className="btn-outline">
                 📞 1800-180-1551
               </a>
@@ -197,9 +198,9 @@ const HomePage = ({ setPage }) => {
           Ready to Transform Your Farming?
         </h2>
         <p>Join 2.5 million farmers already using KrishiMitra AI.</p>
-        <button className="btn-primary" onClick={() => setPage('advisory')}>
+        <Link to="/advisory" className="btn-primary" style={{ display: 'inline-block', textDecoration: 'none' }}>
           Get Free AI Advisory ✨
-        </button>
+        </Link>
       </div>
     </div>
   );

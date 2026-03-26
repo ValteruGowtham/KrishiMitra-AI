@@ -5,12 +5,21 @@ KrishiMitra AI — FastAPI application entry point.
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from dotenv import load_dotenv
 
 from backend.api.routes.advisory import router as advisory_router
+from backend.api.routes.mandi import router as mandi_router
+from backend.api.routes.weather import router as weather_router
 from backend.db.models import init_db
+
+
+# Load project .env so API keys are available in all routes
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+load_dotenv(PROJECT_ROOT / ".env")
 
 
 # ---------------------------------------------------------------------------
@@ -46,6 +55,12 @@ app.add_middleware(
 
 # Mount advisory router
 app.include_router(advisory_router, prefix="/api/v1")
+
+# Mount mandi router
+app.include_router(mandi_router, prefix="/api/v1")
+
+# Mount weather router
+app.include_router(weather_router, prefix="/api/v1")
 
 
 # ---------------------------------------------------------------------------

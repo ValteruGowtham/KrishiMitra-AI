@@ -62,12 +62,16 @@ async def create_advisory(req: AdvisoryRequest):
     except ValueError:
         channel = Channel.WEB
 
+    # Map language code to language label
+    from backend.services.sarvam import SUPPORTED_LANGUAGES
+    language_label = SUPPORTED_LANGUAGES.get(req.language_code, "हिंदी (Hindi)")
+
     query = FarmerQuery(
         farmer_id=req.farmer_id,
         raw_input=req.text_input,
         channel=channel,
         language_code=req.language_code,
-        language_label=req.language if req.language else "hi-IN",
+        language_label=language_label,
     )
     result = await run_orchestrator(query)
     return result
@@ -81,7 +85,8 @@ async def create_advisory(req: AdvisoryRequest):
 async def create_advisory_with_photo(
     farmer_id: str = Form(...),
     text_input: str = Form(...),
-    language: str = Form("hi-IN"),
+    language: str = Form("hi"),
+    language_code: str = Form("hi-IN"),
     photo: UploadFile = File(...),
 ):
     """Run orchestrator with an uploaded photo (pest/disease diagnosis)."""
@@ -94,12 +99,17 @@ async def create_advisory_with_photo(
         content = await photo.read()
         await f.write(content)
 
+    # Map language code to language label
+    from backend.services.sarvam import SUPPORTED_LANGUAGES
+    language_label = SUPPORTED_LANGUAGES.get(language_code, "हिंदी (Hindi)")
+
     query = FarmerQuery(
         farmer_id=farmer_id,
         raw_input=text_input,
         image_path=filepath,
         channel=Channel.WEB,
-        language_code=language,
+        language_code=language_code,
+        language_label=language_label,
     )
     result = await run_orchestrator(query)
     return result

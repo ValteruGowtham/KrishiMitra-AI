@@ -7,9 +7,11 @@ import AdvisoryPage from './pages/AdvisoryPage';
 import MarketRatesPage from './pages/MarketRatesPage';
 import SchemesPage from './pages/SchemesPage';
 import AboutPage from './pages/AboutPage';
+import ApiStatusPage from './pages/ApiStatusPage';
+import WeatherPage from './pages/WeatherPage';
 
 // Navigation Component - Redesigned
-const Navigation = ({ setPage }) => {
+const Navigation = () => {
   const [isOpen, setIsOpen] = useState(false);
   const location = useLocation();
 
@@ -22,35 +24,31 @@ const Navigation = ({ setPage }) => {
     { path: '/advisory', label: 'AI Advisory' },
     { path: '/market-rates', label: 'Mandi Rates' },
     { path: '/schemes', label: 'Schemes' },
+    { path: '/weather', label: 'Weather' },
   ];
-
-  const handleNavClick = (path) => {
-    setPage(path === '/' ? 'home' : path.slice(1));
-  };
 
   return (
     <nav className="nav">
-      <div className="nav-logo" onClick={() => handleNavClick('/')}>
+      <Link to="/" className="nav-logo">
         <div className="nav-logo-icon">🌿</div>
         KrishiMitra
-      </div>
+      </Link>
       
       <div className="nav-links">
         {links.map(link => (
           <Link
             key={link.path}
             to={link.path}
-            onClick={() => handleNavClick(link.path)}
             className={`nav-link ${location.pathname === link.path ? 'active' : ''}`}
           >
             {link.label}
           </Link>
         ))}
       </div>
-      
-      <button className="nav-cta" onClick={() => handleNavClick('/advisory')}>
+
+      <Link to="/advisory" className="nav-cta">
         Start Advisory →
-      </button>
+      </Link>
 
       {/* Mobile Menu Button */}
       <button
@@ -116,7 +114,7 @@ const Navigation = ({ setPage }) => {
 };
 
 // Footer Component - Redesigned
-const Footer = ({ setPage }) => {
+const Footer = () => {
   const currentYear = new Date().getFullYear();
 
   const footerLinks = [
@@ -124,25 +122,22 @@ const Footer = ({ setPage }) => {
     { label: 'Advisory', path: '/advisory' },
     { label: 'Mandi', path: '/market-rates' },
     { label: 'Schemes', path: '/schemes' },
+    { label: 'Weather', path: '/weather' },
     { label: 'About', path: '/about' },
   ];
-
-  const handleFooterClick = (path) => {
-    setPage(path === '/' ? 'home' : path.slice(1));
-  };
 
   return (
     <div className="footer">
       <div className="footer-logo">🌿 KrishiMitra AI</div>
       <div className="footer-links">
         {footerLinks.map((link, i) => (
-          <span
+          <Link
             key={i}
+            to={link.path}
             className="footer-link"
-            onClick={() => handleFooterClick(link.path)}
           >
             {link.label}
-          </span>
+          </Link>
         ))}
       </div>
       <div className="footer-help">📞 Kisan Helpline: 1800-180-1551 (Free 24/7)</div>
@@ -153,26 +148,22 @@ const Footer = ({ setPage }) => {
 
 // Main App Component
 export default function App() {
-  const [page, setPage] = useState('home');
-
-  const handlePageChange = (newPage) => {
-    setPage(newPage);
-  };
-
   return (
     <BrowserRouter>
       <div className="app">
-        <Navigation setPage={handlePageChange} />
+        <Navigation />
         <main className="flex-1 flex flex-col min-h-0">
           <Routes>
-            <Route path="/" element={<HomePage setPage={handlePageChange} />} />
+            <Route path="/" element={<HomePage />} />
             <Route path="/advisory" element={<AdvisoryPage />} />
             <Route path="/market-rates" element={<MarketRatesPage />} />
             <Route path="/schemes" element={<SchemesPage />} />
             <Route path="/about" element={<AboutPage />} />
+            <Route path="/api-status" element={<ApiStatusPage />} />
+            <Route path="/weather" element={<WeatherPage />} />
           </Routes>
         </main>
-        <Footer setPage={handlePageChange} />
+        <Footer />
       </div>
     </BrowserRouter>
   );
