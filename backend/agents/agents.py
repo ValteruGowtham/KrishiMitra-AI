@@ -254,7 +254,7 @@ class CropAdvisoryAgent(BaseKrishiAgent):
 
     def __init__(self) -> None:
         super().__init__()
-        self.llm = get_gemini_pro_llm()
+        self.llm = get_openai_llm()
 
     async def run(
         self,
@@ -417,7 +417,7 @@ class WeatherClimateAgent(BaseKrishiAgent):
 
     def __init__(self) -> None:
         super().__init__()
-        self.llm = get_gemini_flash_llm()
+        self.llm = get_openai_llm()
 
     _DEMO_FORECAST = [
         {"day": 1, "date": "tomorrow", "temp_max": 38, "temp_min": 22, "humidity": 35, "condition": "Clear sky", "wind_kmh": 12, "rain_mm": 0},
@@ -513,7 +513,7 @@ class MandiMarketAgent(BaseKrishiAgent):
 
     def __init__(self) -> None:
         super().__init__()
-        self.llm = get_gemini_pro_llm()
+        self.llm = get_openai_llm()
 
     _MSP_TABLE = {
         "wheat": 2275, "paddy": 2300, "mustard": 5950,
@@ -675,7 +675,7 @@ class GovernmentSchemeAgent(BaseKrishiAgent):
 
     def __init__(self) -> None:
         super().__init__()
-        self.llm = get_gemini_flash_llm()
+        self.llm = get_openai_llm()
 
     def _check_eligibility(self, scheme_row: SchemeDB, farmer: FarmerProfile) -> bool:
         """Simple rule-based eligibility check."""
@@ -776,7 +776,7 @@ class FarmFinanceAgent(BaseKrishiAgent):
 
     def __init__(self) -> None:
         super().__init__()
-        self.llm = get_gemini_pro_llm()
+        self.llm = get_openai_llm()
 
     async def run(
         self,

@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { Mic, Camera, User, MapPin, Globe, Sparkles, Volume2, CheckCircle, X, AlertCircle, Edit2, Save } from 'lucide-react';
 import { useSpeechRecognition, useCamera } from '../hooks';
-import { submitAdvisory, submitAdvisoryWithPhoto, getHealth } from '../services/api';
+import { submitAdvisory, submitAdvisoryWithPhoto, getHealth, textToSpeech } from '../services/api';
 
 const AGENTS = [
   { id: 'soil', name: 'Soil', emoji: '🌱', desc: 'NPK & pH analysis' },
@@ -431,6 +431,9 @@ export default function AdvisoryPage() {
   const [isCameraModalOpen, setIsCameraModalOpen] = useState(false);
   const [toastError, setToastError] = useState(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [audioUrl, setAudioUrl] = useState(null);
+  const audioRef = useRef(null);
   const fileInputRef = useRef(null);
 
   // Load farmer data from localStorage or use default
@@ -601,6 +604,59 @@ export default function AdvisoryPage() {
   const clearError = useCallback(() => {
     setToastError(null);
   }, []);
+
+  // Handle listen (text-to-speech)
+  const handleListen = useCallback(async () => {
+    if (!result?.text) return;
+    
+    if (isPlaying && audioRef.current) {
+      // Stop playing
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+      setIsPlaying(false);
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setIsPlaying(true);
+      
+      // Call TTS API - use Hindi for Indian languages, English otherwise
+      const ttsLang = lang.startsWith('hi') ? 'hi-IN' : 'en-IN';
+      const audioBlob = await textToSpeech(result.text, ttsLang);
+      const audioUrlObj = URL.createObjectURL(audioBlob);
+      setAudioUrl(audioUrlObj);
+      
+      // Play audio
+      const audio = new Audio(audioUrlObj);
+      audioRef.current = audio;
+      
+      audio.onended = () => {
+        setIsPlaying(false);
+        setAudioUrl(null);
+      };
+      
+      audio.onerror = (err) => {
+        console.error('Audio playback error:', err);
+        setToastError({
+          type: 'PLAYBACK_ERROR',
+          message: 'Failed to play audio. Please try again.',
+        });
+        setIsPlaying(false);
+      };
+      
+      await audio.play();
+    } catch (error) {
+      console.error('TTS Error:', error);
+      setToastError({
+        type: 'TTS_ERROR',
+        message: error.response?.data?.detail || error.message || 'Failed to generate speech. Please try again.',
+      });
+      setIsPlaying(false);
+    } finally {
+      setLoading(false);
+    }
+  }, [result, isPlaying, lang]);
 
   return (
     <div className="advisory-layout">
@@ -804,9 +860,9 @@ export default function AdvisoryPage() {
                     <button className="lt-btn active">हिंदी</button>
                     <button className="lt-btn">EN</button>
                   </div>
-                  <button className="listen-btn">
+                  <button className="listen-btn" onClick={handleListen} disabled={!result?.text}>
                     <Volume2 className="w-4 h-4" />
-                    Listen
+                    {isPlaying ? 'Stop' : 'Listen'}
                   </button>
                 </div>
               </div>

@@ -33,18 +33,19 @@ SUPPORTED_LANGUAGES: dict[str, str] = {
 }
 
 # Best available speaker voice per language (Sarvam bulbul:v1 speaker IDs)
+# Available speakers: anushka, abhilash, manisha, vidya, arya, karun, hitesh, aditya, ritu, p
 _TTS_SPEAKERS: dict[str, str] = {
-    "hi-IN": "meera",
-    "bn-IN": "meera",
-    "te-IN": "meera",
-    "mr-IN": "meera",
-    "ta-IN": "meera",
-    "gu-IN": "meera",
-    "kn-IN": "meera",
-    "od-IN": "meera",
-    "pa-IN": "meera",
-    "ml-IN": "meera",
-    "en-IN": "meera",
+    "hi-IN": "anushka",
+    "bn-IN": "anushka",
+    "te-IN": "anushka",
+    "mr-IN": "anushka",
+    "ta-IN": "anushka",
+    "gu-IN": "anushka",
+    "kn-IN": "anushka",
+    "od-IN": "anushka",
+    "pa-IN": "anushka",
+    "ml-IN": "anushka",
+    "en-IN": "anushka",
 }
 
 
@@ -131,8 +132,8 @@ async def synthesise_speech(
                 json={
                     "inputs": [text],
                     "target_language_code": language_code,
-                    "speaker": _TTS_SPEAKERS.get(language_code, "meera"),
-                    "model": "bulbul:v1",
+                    "speaker": _TTS_SPEAKERS.get(language_code, "anushka"),
+                    "model": "bulbul:v2",
                     "enable_preprocessing": True,
                 },
             )

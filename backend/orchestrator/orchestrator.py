@@ -154,6 +154,8 @@ async def parse_intent(state: dict) -> dict:
     voice_msg = await voice.run(s.query, s.farmer)
 
     primary = voice_msg.output_data.get("primary_intent", "general")
+    keyword_scores = voice_msg.output_data.get("keyword_scores", {})
+    
     try:
         intent = Intent(primary)
     except ValueError:
@@ -166,6 +168,14 @@ async def parse_intent(state: dict) -> dict:
         s.agents_to_invoke = []
         s.agent_responses["voice_agent"] = voice_msg
         s.audit_log.append({"node": "parse_intent", "intent": "distress", "agents": []})
+        return _state_to_dict(s)
+
+    # For "general" queries with NO keyword matches, don't invoke farming agents
+    # This allows the synthesize node to answer general questions directly
+    if primary == "general" and len(keyword_scores) == 0:
+        s.agents_to_invoke = []  # No farming agents for non-farming questions
+        s.agent_responses["voice_agent"] = voice_msg
+        s.audit_log.append({"node": "parse_intent", "intent": "general_no_keywords", "agents": []})
         return _state_to_dict(s)
 
     agents = list(_INTENT_AGENT_MAP.get(primary, _INTENT_AGENT_MAP["general"]))
@@ -202,7 +212,7 @@ async def run_agents(state: dict) -> dict:
         agent = agent_cls()
         try:
             result = await asyncio.wait_for(
-                agent.run(s.query, s.farmer, context), timeout=5.0,
+                agent.run(s.query, s.farmer, context), timeout=30.0,
             )
             return agent_id, result
         except asyncio.TimeoutError:
@@ -269,21 +279,57 @@ async def synthesize(state: dict) -> dict:
             "for reference labelled 'English Summary'."
         )
 
-    system_prompt = (
-        "You are KrishiMitra, a trusted farming advisor for Indian farmers. "
-        "Combine the following agent analyses into ONE clear, actionable advisory. "
-        "Write for a farmer with 8th-grade education. Use simple language. "
-        "Structure: 1) Key advice, 2) Actions to take this week, "
-        "3) Government schemes to apply for, 4) Market advice. "
-        f"{lang_instruction}"
-    )
-
-    human_msg = (
-        f"Farmer: {s.farmer.name}, {s.farmer.district}, {s.farmer.state}\n"
-        f"Crop: {s.farmer.current_crop}, Land: {s.farmer.land_acres} acres\n"
-        f"Original question: {s.query.raw_input}\n\n"
-        f"Agent analyses:\n{json.dumps(agent_summaries, indent=2, default=str)}"
-    )
+    # Check if this is a general/non-farming question (no farming agents invoked)
+    is_general_query = len(agent_summaries) == 0
+    
+    # Check if scheme_agent was invoked (for filtering schemes from non-scheme queries)
+    has_scheme_data = "scheme_agent" in agent_summaries
+    
+    if is_general_query:
+        # For general questions, use a flexible prompt
+        system_prompt = (
+            "You are KrishiMitra, a helpful assistant for Indian farmers. "
+            "Answer the farmer's question directly and helpfully. "
+            "If the question is NOT about farming, still answer it simply and clearly. "
+            "Write for a farmer with 8th-grade education. Use simple language. "
+            f"{lang_instruction}"
+        )
+        human_msg = (
+            f"Farmer: {s.farmer.name}, {s.farmer.district}, {s.farmer.state}\n"
+            f"Farmer's question: {s.query.raw_input}\n\n"
+            f"Answer this question directly in simple language."
+        )
+    else:
+        # For farming queries, use the detailed advisory template
+        # But only include schemes if the user asked about schemes
+        is_scheme_query = s.intent.value == "scheme" or "scheme" in s.query.raw_input.lower() or "yojana" in s.query.raw_input.lower() or "subsidy" in s.query.raw_input.lower()
+        
+        if is_scheme_query:
+            system_prompt = (
+                "You are KrishiMitra, a trusted farming advisor for Indian farmers. "
+                "Combine the following agent analyses into ONE clear, actionable advisory. "
+                "Write for a farmer with 8th-grade education. Use simple language. "
+                "Structure: 1) Key advice, 2) Actions to take this week, "
+                "3) Government schemes to apply for, 4) Market advice. "
+                f"{lang_instruction}"
+            )
+        else:
+            # Non-scheme farming query - don't include schemes section
+            system_prompt = (
+                "You are KrishiMitra, a trusted farming advisor for Indian farmers. "
+                "Combine the following agent analyses into ONE clear, actionable advisory. "
+                "Write for a farmer with 8th-grade education. Use simple language. "
+                "Structure: 1) Key advice, 2) Actions to take this week, 3) Market advice. "
+                "Do NOT include government schemes unless the farmer specifically asked about them. "
+                f"{lang_instruction}"
+            )
+        
+        human_msg = (
+            f"Farmer: {s.farmer.name}, {s.farmer.district}, {s.farmer.state}\n"
+            f"Crop: {s.farmer.current_crop}, Land: {s.farmer.land_acres} acres\n"
+            f"Original question: {s.query.raw_input}\n\n"
+            f"Agent analyses:\n{json.dumps(agent_summaries, indent=2, default=str)}"
+        )
 
     try:
         llm = get_openai_llm(temperature=0.2)
