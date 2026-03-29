@@ -5,7 +5,9 @@
 [![React 19](https://img.shields.io/badge/React-19-61dafb.svg)](https://react.dev/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-009688.svg)](https://fastapi.tiangolo.com/)
 
-**KrishiMitra AI** is an AI-powered agricultural advisory platform that provides real-time, multilingual farming guidance to Indian farmers. Built with cutting-edge AI technology, it offers crop advisory, pest diagnosis, market prices, weather forecasts, and government scheme information — all in **11 Indian languages**.
+**KrishiMitra AI is an 8-agent AI platform that delivers real-time, personalized agricultural advisory to Indian farmers in 11 native languages with full voice support — covering soil health, pest diagnosis, live mandi prices, weather forecasting, government scheme matching, and farm finance in a single conversational interface.**
+**Built on a LangGraph state machine with a FastAPI backend and React 19 frontend, it features a 5-layer compliance engine that validates every advisory for pesticide safety, MSP accuracy, fertilizer dosage, and predatory lending — and instantly routes distressed farmers to crisis helplines.**
+**At a time when 140 million Indian farming families make life-altering decisions without expert guidance, KrishiMitra AI puts a certified agronomist, market analyst, scheme advisor, and financial counselor in every farmer's pocket — for free, in their language, on any device.**
 
 ![KrishiMitra AI Banner](./assets/banner.png)
 
