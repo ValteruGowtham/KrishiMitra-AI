@@ -439,25 +439,6 @@ DEBUG=true
 - [ ] Marketplace for farm produce
 
 ---
-
-## 🤝 Contributing
-
-We welcome contributions! Please follow these steps:
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-### Development Guidelines
-
-- Follow PEP 8 for Python code
-- Use ESLint for JavaScript/React code
-- Write tests for new features
-- Document all API endpoints
-- Update README for significant changes
-
 ---
 
 ## 📄 License
@@ -465,31 +446,6 @@ We welcome contributions! Please follow these steps:
 This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) file for details.
 
 ---
-
-## 👥 Team
-
-Built with ❤️ by the **KrishiMitra AI Team**
-
-### Key Contributors
-- [Your Name] - Initial work
-- [Contributors](https://github.com/ValteruGowtham/KrishiMitra-AI/graphs/contributors)
-
----
-
-## 📞 Support & Contact
-
-### Farmer Helplines
-- **Kisan Call Centre**: 1800-180-1551 (Toll-free, 24/7)
-- **KVK Support**: 1800-425-1122
-
-### Technical Support
-- **GitHub Issues**: https://github.com/ValteruGowtham/KrishiMitra-AI/issues
-- **Email**: support@krishimitra.ai
-
-### Emergency Distress Support
-If you or someone you know is experiencing farming-related distress:
-- **National Helpline**: 1800-180-1551
-- **Kiran Mental Health**: 1800-599-0019
 
 ---
 
@@ -522,4 +478,4 @@ If this project helps you, please give it a ⭐️ star on GitHub!
 
 ---
 
-*Last Updated: March 26, 2026*
+
